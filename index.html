@@ -31,6 +31,7 @@
   --shadow-lg: 0 16px 40px rgba(22, 32, 51, 0.1);
   --radius: 12px;
   --radius-sm: 8px;
+  --topbar-height: 64px;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
@@ -45,11 +46,12 @@ body { display: flex; flex-direction: column; }
 
 /* ========== TOPBAR ========== */
 .topbar {
+  position: relative;
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 24px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--line);
-  z-index: 50;
+  z-index: 180;
 }
 .brand {
   display: flex; align-items: center; gap: 10px;
@@ -299,15 +301,15 @@ body { display: flex; flex-direction: column; }
 /* ========== SIDE PANEL ========== */
 .panel {
   position: fixed;
-  top: 0; right: 0;
-  width: 380px; height: 100vh;
+  top: var(--topbar-height); right: 0;
+  width: 380px; height: calc(100vh - var(--topbar-height));
   background: var(--bg-elevated);
   border-left: 1px solid var(--line);
   box-shadow: -4px 0 24px rgba(0,0,0,0.04);
   display: flex; flex-direction: column;
   transform: translateX(100%);
   transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 100;
+  z-index: 120;
 }
 .panel.open { transform: translateX(0); }
 .panel-header {
@@ -679,13 +681,15 @@ body { display: flex; flex-direction: column; }
 /* ========== PRINT MENU ========== */
 .menu {
   position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
   background: var(--bg-elevated);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);
   padding: 4px;
   min-width: 200px;
-  z-index: 60;
+  z-index: 250;
   display: none;
 }
 .menu.open { display: block; }
@@ -745,7 +749,13 @@ body { display: flex; flex-direction: column; }
 }
 
 /* ========== HIDDEN FILE INPUTS ========== */
-.hidden-input { display: none; }
+.hidden-input {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
 
 /* ========== SCROLLBAR ========== */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -754,6 +764,8 @@ body { display: flex; flex-direction: column; }
 ::-webkit-scrollbar-thumb:hover { background: #b8b6af; }
 
 @media (max-width: 760px) {
+  :root { --topbar-height: 112px; }
+
   .field-row,
   .field-row-3 {
     grid-template-columns: 1fr;
@@ -2336,10 +2348,6 @@ function toggleMenu(id) {
   $$('.menu').forEach(m => m.classList.remove('open'));
   if (!isOpen) {
     menu.classList.add('open');
-    const btn = id === 'exportMenu' ? $('exportBtn') : $('printBtn');
-    const r = btn.getBoundingClientRect();
-    menu.style.top = (r.bottom + 4) + 'px';
-    menu.style.left = r.left + 'px';
   }
 }
 document.addEventListener('click', e => {
@@ -2358,12 +2366,12 @@ $$('#exportMenu .menu-item').forEach(item => {
 });
 
 function exportJSON() {
-  state.relations = normalizeRelations(state.relations, state.people);
+  const relations = normalizeRelations(state.relations, state.people);
   const data = {
     version: 2,
     exportedAt: new Date().toISOString(),
     people: state.people,
-    relations: state.relations,
+    relations,
     nextId: state.nextId,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2469,8 +2477,9 @@ function importJSON(file) {
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
-      if (!data.people) throw new Error('Archivo inválido');
-      state.people = normalizePeopleMap(data.people || {});
+      const rawPeople = data.people || data.personas || (Array.isArray(data) ? data : null);
+      if (!rawPeople) throw new Error('Archivo inválido');
+      state.people = normalizePeopleMap(rawPeople);
       Object.values(state.people).forEach(normalizePerson);
       state.relations = normalizeRelations(data.relations || { parents: {}, partners: {} }, state.people);
       state.nextId = nextIdFromPeople(state.people, data.nextId);
@@ -2724,20 +2733,23 @@ function printWithFilter(keepSet) {
   fitToScreen();
   preparePrintCanvas(keepSet);
   const hidden = hideOutsidePrintSet(keepSet);
+  const restore = () => {
+    hidden.forEach(c => c.style.display = '');
+    inner.style.width = previousSize.width;
+    inner.style.height = previousSize.height;
+    state.visibleFilter = null;
+    state.viewMode = previousView;
+    state.focusId = previousFocus;
+    state.view = previousTransform;
+    state.layoutDirty = true;
+    render();
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+  window.print();
   setTimeout(() => {
-    window.print();
-    setTimeout(() => {
-      hidden.forEach(c => c.style.display = '');
-      inner.style.width = previousSize.width;
-      inner.style.height = previousSize.height;
-      state.visibleFilter = null;
-      state.viewMode = previousView;
-      state.focusId = previousFocus;
-      state.view = previousTransform;
-      state.layoutDirty = true;
-      render();
-    }, 500);
-  }, 100);
+    if (state.visibleFilter) restore();
+  }, 1000);
 }
 
 function preparePrintCanvas(keepSet) {
