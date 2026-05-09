@@ -68,3 +68,16 @@ https://ntizar.github.io/FamilyTree/
 ## Autor
 
 Hecho por **David Antizar**.
+
+## English
+
+`FamilyTree` is a static HTML, CSS and JavaScript app for building a visual family tree in the browser.
+
+- Create people as cards.
+- Link them as father, mother, children, siblings or multiple partners.
+- Keep photos, dates, places, notes and occupations.
+- Switch between Spanish and English from the `ES / EN` button in the toolbar.
+- Use `Branches` or double-click a card to switch between direct branch and full tree.
+- Export to `JSON` with photos and timestamped filenames.
+- Export to `Excel` for review or sharing.
+- Print the full tree, a direct branch, descendants or a year-filtered view.

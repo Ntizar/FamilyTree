@@ -100,6 +100,25 @@ body { display: flex; flex-direction: column; }
   padding: 8px; width: 34px; height: 34px;
   justify-content: center;
 }
+.lang-switch {
+  gap: 4px;
+  padding: 6px;
+}
+.lang-switch button {
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+.lang-switch button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 .divider-v {
   width: 1px; height: 22px; background: var(--line); margin: 0 6px;
 }
@@ -840,6 +859,10 @@ body { display: flex; flex-direction: column; }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.6 2.6 0 0 1 5 1c0 1.8-2.6 2.2-2.6 4"/><circle cx="12" cy="17" r="0.7" fill="currentColor" stroke="none"/></svg>
       Guía
     </button>
+    <div class="btn lang-switch" id="langSwitch" aria-label="Idioma / Language">
+      <button type="button" data-lang="es" class="active">ES</button>
+      <button type="button" data-lang="en">EN</button>
+    </div>
     <div class="divider-v"></div>
     <button class="btn btn-primary" id="addPersonBtn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1027,9 +1050,29 @@ const CARD_WIDTH = 200;
 const CARD_HEIGHT = 160;
 const H_SPACING = 50;
 const V_SPACING = 110;
+const UI_TEXT = {
+  es: {
+    search: 'Buscar persona...', load: 'Cargar', export: 'Exportar', print: 'Imprimir', guide: 'Guía', addPerson: 'Añadir persona',
+    identity: 'Identidad', birth: 'Nacimiento', death: 'Fallecimiento', details: 'Más detalles', parents: 'Padres', partners: 'Parejas', children: 'Hijos', siblings: 'Hermanos',
+    save: 'Guardar cambios', delete: 'Eliminar', viewBranches: 'Ver ramas', father: 'Padre', mother: 'Madre', parent: 'Progenitor',
+    loaded: count => `Cargado: ${count} personas`, jsonDownloaded: 'Archivo JSON descargado', excelDownloaded: 'Archivo Excel descargado', linked: 'Vinculado',
+  },
+  en: {
+    search: 'Search person...', load: 'Load', export: 'Export', print: 'Print', guide: 'Guide', addPerson: 'Add person',
+    identity: 'Identity', birth: 'Birth', death: 'Death', details: 'More details', parents: 'Parents', partners: 'Partners', children: 'Children', siblings: 'Siblings',
+    save: 'Save changes', delete: 'Delete', viewBranches: 'Branches', father: 'Father', mother: 'Mother', parent: 'Parent',
+    loaded: count => `Loaded: ${count} people`, jsonDownloaded: 'JSON file downloaded', excelDownloaded: 'Excel file downloaded', linked: 'Linked',
+  },
+};
+let currentLang = 'es';
 
 const $ = id => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
+
+function t(key, ...args) {
+  const value = UI_TEXT[currentLang]?.[key] ?? UI_TEXT.es[key] ?? key;
+  return typeof value === 'function' ? value(...args) : value;
+}
 
 /* ===========================================================
    PERSON DATA HELPERS
@@ -1096,7 +1139,7 @@ function displayName(person) {
 }
 
 function relationRoleLabel(role) {
-  return role === 'father' ? 'Padre' : role === 'mother' ? 'Madre' : 'Progenitor';
+  return role === 'father' ? t('father') : role === 'mother' ? t('mother') : t('parent');
 }
 
 function roleForRelType(relType) {
@@ -1185,6 +1228,25 @@ function parentEntries(id) {
   return current.map(normalizeParentEntry).filter(Boolean);
 }
 
+function parentIds(id, active = null) {
+  return parentEntries(id)
+    .map(parent => parent.id)
+    .filter(parentId => state.people[parentId] && (!active || active.has(parentId)));
+}
+
+function parentKey(id, active = null) {
+  return parentIds(id, active).sort().join('|');
+}
+
+function keyToParentIds(key) {
+  return key ? key.split('|').filter(Boolean) : [];
+}
+
+function partnerIds(id, active = null) {
+  return (state.relations.partners[id] || [])
+    .filter(pid => state.people[pid] && (!active || active.has(pid)));
+}
+
 function visibleIds() {
   const ids = new Set(Object.keys(state.people));
   if (state.visibleFilter) return new Set([...ids].filter(id => state.visibleFilter.has(id)));
@@ -1217,7 +1279,31 @@ function getDirectBranchIds(rootId) {
   for (const id of [...keep]) {
     for (const partner of getPartners(id)) keep.add(partner.id);
   }
+  addFamilyContext(keep);
   return keep;
+}
+
+function addFamilyContext(keep) {
+  let changed = true;
+  let safety = 20;
+  while (changed && safety-- > 0) {
+    changed = false;
+    for (const id of [...keep]) {
+      for (const partnerId of partnerIds(id)) {
+        if (!keep.has(partnerId)) { keep.add(partnerId); changed = true; }
+      }
+      for (const parentId of parentIds(id)) {
+        if (!keep.has(parentId)) { keep.add(parentId); changed = true; }
+      }
+    }
+    for (const [childId, parents] of Object.entries(state.relations.parents)) {
+      const ps = parents.map(normalizeParentEntry).filter(Boolean).map(parent => parent.id);
+      if (ps.some(parentId => keep.has(parentId)) && !keep.has(childId) && state.people[childId]) {
+        keep.add(childId);
+        changed = true;
+      }
+    }
+  }
 }
 
 function getInitials(name) {
@@ -1282,8 +1368,18 @@ function addParentChild(parentId, childId, role = 'parent') {
     toast(`Esta persona ya tiene ${role === 'father' ? 'padre' : 'madre'}`);
     return false;
   }
-  if (parents.length >= 2) {
+  const knownRoles = parents.filter(p => p.role !== 'parent').length;
+  const unknownRoles = parents.filter(p => p.role === 'parent').length;
+  if (role === 'parent' && parents.length >= 2) {
     toast('Cada persona puede tener como máximo 2 progenitores');
+    return false;
+  }
+  if (role !== 'parent' && knownRoles >= 2) {
+    toast('Ya hay padre y madre asignados');
+    return false;
+  }
+  if (role !== 'parent' && unknownRoles && parents.length >= 2) {
+    toast('Quita el progenitor sin especificar antes de añadir padre o madre');
     return false;
   }
   parents.push({ id: parentId, role });
@@ -1337,132 +1433,27 @@ function computeLayout() {
   const ids = [...visibleIds()];
   if (!ids.length) return;
   const active = new Set(ids);
-
-  // Compute generations via BFS from "roots" (people with no parents)
-  const generation = {};
-  const roots = ids.filter(id => !parentEntries(id).some(parent => active.has(parent.id)));
-
-  // BFS down: each child = max(parent gen) + 1
-  // Use iterative approach until stable
-  ids.forEach(id => generation[id] = roots.includes(id) ? 0 : null);
-
-  let changed = true;
-  let safety = 50;
-  while (changed && safety-- > 0) {
-    changed = false;
-    for (const id of ids) {
-      const parents = parentEntries(id).map(parent => parent.id).filter(parentId => active.has(parentId));
-      if (!parents.length) continue;
-      const parentGens = parents.map(p => generation[p]).filter(g => g !== null);
-      if (!parentGens.length) continue;
-      const newGen = Math.max(...parentGens) + 1;
-      if (generation[id] !== newGen) {
-        generation[id] = newGen;
-        changed = true;
-      }
-    }
-  }
-  // Anyone still null: place at gen 0
-  ids.forEach(id => { if (generation[id] === null) generation[id] = 0; });
-
-  // Group by generation
-  const byGen = {};
-  ids.forEach(id => {
-    const g = generation[id];
-    if (!byGen[g]) byGen[g] = [];
-    byGen[g].push(id);
-  });
-
-  // Within each generation, order siblings together and partners adjacent
   const positions = {};
+
+  state.relations = normalizeRelations(state.relations, state.people);
+  const generation = computeGenerations(ids, active);
+  const byGen = groupByGeneration(ids, generation);
   const sortedGens = Object.keys(byGen).map(Number).sort((a, b) => a - b);
-
-  // Build "couples" — pair partners so they show together
-  // Then order generations from top (smallest) to bottom (largest)
-
-  // Top-down approach: for each generation, build ordered list
+  const spouseGroups = buildSpouseGroups(ids, active);
+  const familyGroupsByGen = buildFamilyGroupsByGeneration(ids, active, generation);
   const ordered = {};
-  for (const g of sortedGens) {
-    const inGen = new Set(byGen[g]);
-    const list = [];
-    const placed = new Set();
-
-    // If parent generation already ordered, group children by parent positions
-    if (g > 0 && ordered[g - 1]) {
-      // For each parent in previous gen order, append their children
-      const parentOrder = ordered[g - 1];
-      const childrenSeen = new Set();
-      for (const pid of parentOrder) {
-        const kids = getChildren(pid).map(c => c.id).filter(cid => inGen.has(cid) && !childrenSeen.has(cid));
-        for (const kid of kids) {
-          if (placed.has(kid)) continue;
-          // Add kid + their partner (if partner is in this gen)
-          list.push(kid); placed.add(kid); childrenSeen.add(kid);
-          const partners = (state.relations.partners[kid] || []).filter(pid => inGen.has(pid) && !placed.has(pid));
-          for (const par of partners) {
-            list.push(par); placed.add(par); childrenSeen.add(par);
-          }
-        }
-      }
-    }
-    // Append any remaining people in this gen (couple them too)
-    for (const id of byGen[g]) {
-      if (placed.has(id)) continue;
-      list.push(id); placed.add(id);
-      const partners = (state.relations.partners[id] || []).filter(pid => inGen.has(pid) && !placed.has(pid));
-      for (const par of partners) {
-        list.push(par); placed.add(par);
-      }
-    }
-    ordered[g] = list;
-  }
-
-  // Now compute X coordinates
-  // Each generation's row = ordered[g], placed evenly with H_SPACING
-  // Center each row horizontally around 0
-  const rowWidths = {};
-  for (const g of sortedGens) {
-    rowWidths[g] = ordered[g].length * (CARD_WIDTH + H_SPACING) - H_SPACING;
-  }
-  const maxW = Math.max(...Object.values(rowWidths));
 
   for (const g of sortedGens) {
+    ordered[g] = orderGeneration(byGen[g], g, ordered[g - 1] || [], spouseGroups, familyGroupsByGen[g] || [], positions, active);
     const list = ordered[g];
     const totalW = list.length * (CARD_WIDTH + H_SPACING) - H_SPACING;
     let startX = -totalW / 2;
-    // Try to align children under midpoint of parents (simple post-pass)
     list.forEach((id, i) => {
-      positions[id] = {
-        x: startX + i * (CARD_WIDTH + H_SPACING),
-        y: g * (CARD_HEIGHT + V_SPACING),
-      };
+      positions[id] = { x: startX + i * (CARD_WIDTH + H_SPACING), y: g * (CARD_HEIGHT + V_SPACING) };
     });
   }
 
-  // Post-pass: try to center children under their parents (one iteration)
-  for (let pass = 0; pass < 3; pass++) {
-    for (const g of sortedGens.slice().reverse()) {
-      const list = ordered[g];
-      // For each "couple unit" with kids, center kids under it
-      // We'll just nudge each row to center under parents on average
-      if (g === 0) continue;
-      // Compute each person's parents' average X
-      const ideal = {};
-      for (const id of list) {
-        const parents = parentEntries(id).map(parent => parent.id).filter(parentId => active.has(parentId));
-        if (!parents.length) continue;
-        const avgX = parents.reduce((s, p) => s + (positions[p]?.x ?? 0), 0) / parents.length;
-        ideal[id] = avgX;
-      }
-      // Compute average shift desired (without breaking ordering)
-      const shifts = list.map(id => ideal[id] !== undefined ? ideal[id] - positions[id].x : null);
-      const validShifts = shifts.filter(s => s !== null);
-      if (!validShifts.length) continue;
-      const avgShift = validShifts.reduce((a, b) => a + b, 0) / validShifts.length;
-      // Apply average shift to whole row (preserves ordering and spacing)
-      list.forEach(id => positions[id].x += avgShift);
-    }
-  }
+  refineFamilyPositions(sortedGens, ordered, familyGroupsByGen, positions, active);
 
   // Apply
   for (const id of ids) {
@@ -1472,6 +1463,162 @@ function computeLayout() {
     }
   }
   state.layoutDirty = false;
+}
+
+function computeGenerations(ids, active) {
+  const generation = {};
+  ids.forEach(id => generation[id] = parentIds(id, active).length ? null : 0);
+  let changed = true;
+  let safety = ids.length * 8;
+  while (changed && safety-- > 0) {
+    changed = false;
+    for (const id of ids) {
+      const parents = parentIds(id, active);
+      if (parents.length) {
+        const parentGens = parents.map(pid => generation[pid]).filter(g => g !== null && g !== undefined);
+        if (parentGens.length) {
+          const nextGen = Math.max(...parentGens) + 1;
+          if (generation[id] !== nextGen) {
+            generation[id] = nextGen;
+            changed = true;
+          }
+        }
+      }
+    }
+    for (const id of ids) {
+      for (const pid of partnerIds(id, active)) {
+        const a = generation[id];
+        const b = generation[pid];
+        if (a !== null && a !== undefined && b !== a) { generation[pid] = a; changed = true; }
+        else if ((a === null || a === undefined) && b !== null && b !== undefined) { generation[id] = b; changed = true; }
+      }
+    }
+  }
+  ids.forEach(id => { if (generation[id] === null || generation[id] === undefined) generation[id] = 0; });
+  return generation;
+}
+
+function groupByGeneration(ids, generation) {
+  const byGen = {};
+  ids.forEach(id => {
+    const g = generation[id];
+    if (!byGen[g]) byGen[g] = [];
+    byGen[g].push(id);
+  });
+  return byGen;
+}
+
+function buildSpouseGroups(ids, active) {
+  const groups = [];
+  const seen = new Set();
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    const group = [id];
+    seen.add(id);
+    for (const pid of partnerIds(id, active)) {
+      if (!seen.has(pid)) { group.push(pid); seen.add(pid); }
+    }
+    groups.push(group);
+  }
+  return groups;
+}
+
+function buildFamilyGroupsByGeneration(ids, active, generation) {
+  const groups = {};
+  const byKey = {};
+  for (const childId of ids) {
+    const key = parentKey(childId, active);
+    if (!key) continue;
+    if (!byKey[key]) byKey[key] = [];
+    byKey[key].push(childId);
+  }
+  for (const [key, children] of Object.entries(byKey)) {
+    const childGen = Math.max(...children.map(id => generation[id]));
+    if (!groups[childGen]) groups[childGen] = [];
+    groups[childGen].push({ key, parents: keyToParentIds(key), children: children.sort((a, b) => displayName(state.people[a]).localeCompare(displayName(state.people[b]))) });
+  }
+  return groups;
+}
+
+function orderGeneration(ids, generation, previousOrder, spouseGroups, familyGroups, positions, active) {
+  const inGen = new Set(ids);
+  const ordered = [];
+  const placed = new Set();
+  const familyRank = familyGroups.map(group => ({
+    group,
+    rank: group.parents.reduce((sum, pid) => sum + Math.max(0, previousOrder.indexOf(pid)), 0) / Math.max(1, group.parents.length),
+  })).sort((a, b) => a.rank - b.rank);
+
+  const addPersonWithPartners = id => {
+    if (!inGen.has(id) || placed.has(id)) return;
+    ordered.push(id);
+    placed.add(id);
+    for (const partnerId of partnerIds(id, active)) {
+      if (inGen.has(partnerId) && !placed.has(partnerId)) {
+        ordered.push(partnerId);
+        placed.add(partnerId);
+      }
+    }
+  };
+
+  for (const { group } of familyRank) {
+    for (const childId of group.children) addPersonWithPartners(childId);
+  }
+
+  for (const spouseGroup of spouseGroups) {
+    if (!spouseGroup.some(id => inGen.has(id)) || spouseGroup.every(id => placed.has(id))) continue;
+    spouseGroup.filter(id => inGen.has(id)).forEach(addPersonWithPartners);
+  }
+
+  ids
+    .filter(id => !placed.has(id))
+    .sort((a, b) => displayName(state.people[a]).localeCompare(displayName(state.people[b])))
+    .forEach(addPersonWithPartners);
+
+  return ordered;
+}
+
+function refineFamilyPositions(sortedGens, ordered, familyGroupsByGen, positions, active) {
+  for (let pass = 0; pass < 6; pass++) {
+    for (const g of sortedGens) {
+      const list = ordered[g] || [];
+      const familyGroups = familyGroupsByGen[g] || [];
+      for (const group of familyGroups) {
+        const visibleChildren = group.children.filter(id => positions[id]);
+        const visibleParents = group.parents.filter(id => positions[id]);
+        if (!visibleChildren.length || !visibleParents.length) continue;
+        const parentsCenter = averageCenter(visibleParents, positions);
+        const childrenCenter = averageCenter(visibleChildren, positions);
+        shiftContiguousBlock(list, visibleChildren, parentsCenter - childrenCenter, positions);
+      }
+      keepRowSpaced(list, positions);
+    }
+  }
+}
+
+function averageCenter(ids, positions) {
+  return ids.reduce((sum, id) => sum + positions[id].x + CARD_WIDTH / 2, 0) / ids.length;
+}
+
+function shiftContiguousBlock(row, ids, delta, positions) {
+  if (!delta || !ids.length) return;
+  const indexes = ids.map(id => row.indexOf(id)).filter(i => i >= 0);
+  if (!indexes.length) return;
+  const start = Math.min(...indexes);
+  const end = Math.max(...indexes);
+  for (let i = start; i <= end; i++) {
+    if (positions[row[i]]) positions[row[i]].x += delta;
+  }
+}
+
+function keepRowSpaced(row, positions) {
+  for (let i = 1; i < row.length; i++) {
+    const prev = positions[row[i - 1]];
+    const current = positions[row[i]];
+    if (!prev || !current) continue;
+    const minX = prev.x + CARD_WIDTH + H_SPACING;
+    if (current.x < minX) current.x = minX;
+  }
 }
 
 /* ===========================================================
@@ -1883,6 +2030,31 @@ $('viewOptionsBtn').onclick = () => {
   showViewOptions(currentEditingId);
 };
 
+function applyLanguage(lang) {
+  currentLang = lang === 'en' ? 'en' : 'es';
+  document.documentElement.lang = currentLang;
+  $('searchInput').placeholder = t('search');
+  $('loadBtn').lastChild.textContent = ` ${t('load')}`;
+  $('exportBtn').lastChild.textContent = ` ${t('export')}`;
+  $('printBtn').lastChild.textContent = ` ${t('print')}`;
+  $('helpBtn').lastChild.textContent = ` ${t('guide')}`;
+  $('addPersonBtn').lastChild.textContent = ` ${t('addPerson')}`;
+  $('deleteBtn').textContent = t('delete');
+  if ($('viewOptionsBtn')) $('viewOptionsBtn').textContent = t('viewBranches');
+  $('saveBtn').textContent = t('save');
+  $$('#langSwitch button').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === currentLang));
+  if (currentEditingId) {
+    renderRelationsList('parentsList', getParentRelationItems(currentEditingId), currentEditingId, 'parent');
+    renderRelationsList('partnersList', getPartners(currentEditingId), currentEditingId, 'partner');
+    renderRelationsList('childrenList', getChildren(currentEditingId), currentEditingId, 'child');
+    renderRelationsList('siblingsList', getSiblings(currentEditingId), currentEditingId, 'sibling');
+  }
+}
+
+$$('#langSwitch button').forEach(btn => {
+  btn.onclick = () => applyLanguage(btn.dataset.lang);
+});
+
 $('deleteBtn').onclick = () => {
   if (!currentEditingId) return;
   const p = state.people[currentEditingId];
@@ -2067,7 +2239,7 @@ function showPersonPicker(sourceId, relType) {
       state.layoutDirty = true;
       render();
       selectPerson(sourceId);
-      toast('Vinculado');
+      toast(t('linked'));
     };
   });
 }
@@ -2376,7 +2548,7 @@ function exportJSON() {
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   download(blob, `arbol-genealogico-${dateStamp()}.json`);
-  toast('Archivo JSON descargado');
+  toast(t('jsonDownloaded'));
 }
 
 function exportExcel() {
@@ -2438,7 +2610,7 @@ function exportExcel() {
   XLSX.utils.book_append_sheet(wb, wsInfo, 'Info');
 
   XLSX.writeFile(wb, `arbol-genealogico-${dateStamp()}.xlsx`);
-  toast('Archivo Excel descargado');
+  toast(t('excelDownloaded'));
 }
 
 function dateStamp() {
@@ -2491,7 +2663,7 @@ function importJSON(file) {
       panel.classList.remove('open');
       render();
       fitToScreen();
-      toast(`Cargado: ${Object.keys(state.people).length} personas`);
+      toast(t('loaded', Object.keys(state.people).length));
     } catch (err) {
       toast('Error al cargar el archivo');
       console.error(err);
@@ -2638,7 +2810,7 @@ function importExcel(file) {
       panel.classList.remove('open');
       render();
       fitToScreen();
-      toast(`Cargado: ${Object.keys(people).length} personas (sin fotos — usa JSON para fotos)`);
+      toast(t('loaded', Object.keys(people).length));
     } catch (err) {
       toast('Error al cargar Excel');
       console.error(err);
@@ -2796,6 +2968,7 @@ function init() {
   state.view.x = wrap.clientWidth / 2;
   state.view.y = wrap.clientHeight / 2;
   applyTransform();
+  applyLanguage(currentLang);
   render();
   setTimeout(() => showWelcomeModal(), 120);
 }
