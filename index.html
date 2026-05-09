@@ -4,34 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Raíces · Árbol Genealógico</title>
-<meta name="description" content="Editor visual de árboles genealógicos con fotos, exportación JSON/Excel y estilo Ntizar Aurora.">
+<meta name="description" content="Editor visual de árboles genealógicos con fotos, exportación JSON y Excel, e interfaz clara para construir la familia desde una persona inicial.">
 <meta name="author" content="David Antizar">
 <meta property="og:title" content="Raíces · Árbol Genealógico">
-<meta property="og:description" content="Crea, edita, exporta e imprime árboles genealógicos con una capa visual Ntizar Aurora.">
+<meta property="og:description" content="Crea, edita, exporta e imprime árboles genealógicos desde una persona inicial sin romper el flujo del editor.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#edf4ff">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Ntizar/Ntizar-Aurora@v5.1.0/ntizar.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Ntizar/Ntizar-Aurora@v5.1.0/ntizar.themes.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
-  --bg: #fafaf7;
+  --bg: #f6f9ff;
   --bg-elevated: #ffffff;
-  --ink: #1a1a1a;
-  --ink-soft: #4a4a4a;
-  --ink-muted: #8a8a85;
-  --line: #e8e6df;
-  --line-soft: #f0eee7;
-  --accent: #2a4d3a;
-  --accent-soft: #e8efe9;
-  --warm: #c89b6b;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
-  --shadow-lg: 0 12px 32px rgba(0,0,0,0.08);
+  --ink: #162033;
+  --ink-soft: #334155;
+  --ink-muted: #718198;
+  --line: #dbe4f0;
+  --line-soft: #edf3fb;
+  --accent: #356ad8;
+  --accent-soft: #e7efff;
+  --warm: #f1a84b;
+  --shadow-sm: 0 1px 2px rgba(22, 32, 51, 0.05);
+  --shadow-md: 0 6px 20px rgba(22, 32, 51, 0.08);
+  --shadow-lg: 0 16px 40px rgba(22, 32, 51, 0.1);
   --radius: 12px;
   --radius-sm: 8px;
 }
@@ -384,6 +381,7 @@ body { display: flex; flex-direction: column; }
 /* ========== FORM ========== */
 .field { margin-bottom: 14px; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field-row-3 { grid-template-columns: 1.2fr 1fr 1fr; }
 .field label {
   display: block;
   font-size: 11px; font-weight: 500;
@@ -722,10 +720,17 @@ body { display: flex; flex-direction: column; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #d0cec7; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #b8b6af; }
+
+@media (max-width: 760px) {
+  .field-row,
+  .field-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
 <link rel="stylesheet" href="./aurora.css">
 </head>
-<body class="nz family-tree-app" data-nz-theme="light" data-nz-skin="aurora" data-nz-shape="rounded" data-nz-motion="calm">
+<body class="family-tree-app family-tree-skin">
 
 <!-- ============ TOP BAR ============ -->
 <header class="topbar">
@@ -739,7 +744,7 @@ body { display: flex; flex-direction: column; }
       </svg>
     </div>
     Raíces
-    <span class="brand-sub">FamilyTree · Ntizar Aurora</span>
+    <span class="brand-sub">Árbol Genealógico</span>
   </div>
 
   <div class="toolbar">
@@ -848,9 +853,19 @@ body { display: flex; flex-direction: column; }
     </div>
 
     <div class="section-title">Identidad</div>
-    <div class="field">
-      <label>Nombre completo</label>
-      <input type="text" id="fName" placeholder="Ej: María Sánchez Pérez">
+    <div class="field-row field-row-3">
+      <div class="field">
+        <label>Nombre/s</label>
+        <input type="text" id="fFirstName" placeholder="Ej: María del Carmen">
+      </div>
+      <div class="field">
+        <label>Primer apellido</label>
+        <input type="text" id="fLastName1" placeholder="Ej: Sánchez">
+      </div>
+      <div class="field">
+        <label>Segundo apellido</label>
+        <input type="text" id="fLastName2" placeholder="Ej: Pérez">
+      </div>
     </div>
     <div class="field">
       <label>Apodo o mote</label>
@@ -971,9 +986,15 @@ const $$ = sel => document.querySelectorAll(sel);
    =========================================================== */
 function newPerson(data = {}) {
   const id = 'p' + (state.nextId++);
+  const firstName = data.firstName || data.givenName || '';
+  const lastName1 = data.lastName1 || '';
+  const lastName2 = data.lastName2 || '';
   const person = {
     id,
-    name: data.name || 'Sin nombre',
+    name: data.name || '',
+    firstName,
+    lastName1,
+    lastName2,
     nickname: data.nickname || '',
     gender: data.gender || '',
     birthDate: data.birthDate || '',
@@ -988,7 +1009,40 @@ function newPerson(data = {}) {
     y: data.y ?? 0,
   };
   state.people[id] = person;
+  normalizePerson(person);
   return person;
+}
+
+function buildFullName(firstName = '', lastName1 = '', lastName2 = '') {
+  return [firstName, lastName1, lastName2].map(part => String(part || '').trim()).filter(Boolean).join(' ');
+}
+
+function normalizePerson(person) {
+  if (!person) return person;
+  person.firstName = String(person.firstName || '').trim();
+  person.lastName1 = String(person.lastName1 || '').trim();
+  person.lastName2 = String(person.lastName2 || '').trim();
+
+  if ((!person.firstName && !person.lastName1 && !person.lastName2) && person.name) {
+    const parts = String(person.name).trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 3) {
+      person.firstName = parts.slice(0, -2).join(' ');
+      person.lastName1 = parts[parts.length - 2];
+      person.lastName2 = parts[parts.length - 1];
+    } else if (parts.length === 2) {
+      person.firstName = parts[0];
+      person.lastName1 = parts[1];
+    } else if (parts.length === 1) {
+      person.firstName = parts[0];
+    }
+  }
+
+  person.name = buildFullName(person.firstName, person.lastName1, person.lastName2) || String(person.name || '').trim() || 'Sin nombre';
+  return person;
+}
+
+function displayName(person) {
+  return normalizePerson(person)?.name || 'Sin nombre';
 }
 
 function getInitials(name) {
@@ -1253,16 +1307,18 @@ function renderPersonCard(p) {
   el.style.left = p.x + 'px';
   el.style.top = p.y + 'px';
 
+  const fullName = displayName(p);
+
   const photoHtml = p.photo
-    ? `<img src="${p.photo}" alt="${p.name}">`
-    : `<span>${getInitials(p.name)}</span>`;
+    ? `<img src="${p.photo}" alt="${fullName}">`
+    : `<span>${getInitials(fullName)}</span>`;
 
   const dates = formatDates(p);
   const place = p.birthPlace || '';
 
   el.innerHTML = `
     <div class="person-photo">${photoHtml}</div>
-    <div class="person-name">${escapeHtml(p.name)}</div>
+    <div class="person-name">${escapeHtml(fullName)}</div>
     ${dates ? `<div class="person-dates">${dates}</div>` : ''}
     ${place ? `<div class="person-place">${escapeHtml(place)}</div>` : ''}
     <button class="add-btn add-btn-top" data-add="parent" title="Añadir padre/madre">↑<span class="add-tooltip">Añadir padre/madre</span></button>
@@ -1436,10 +1492,13 @@ function selectPerson(id) {
   currentEditingId = id;
   const p = state.people[id];
   if (!p) return;
+  normalizePerson(p);
 
   // Fill fields
-  $('panelTitle').textContent = p.name || 'Sin nombre';
-  $('fName').value = p.name || '';
+  $('panelTitle').textContent = displayName(p);
+  $('fFirstName').value = p.firstName || '';
+  $('fLastName1').value = p.lastName1 || '';
+  $('fLastName2').value = p.lastName2 || '';
   $('fNickname').value = p.nickname || '';
   $('fGender').value = p.gender || '';
   $('fBirthDate').value = p.birthDate || '';
@@ -1484,11 +1543,12 @@ function renderRelationsList(containerId, list, sourceId, relType) {
   for (const rel of list) {
     const chip = document.createElement('div');
     chip.className = 'relation-chip';
-    const photoHtml = rel.photo ? `<img src="${rel.photo}">` : `<span>${getInitials(rel.name)}</span>`;
+    const relName = displayName(rel);
+    const photoHtml = rel.photo ? `<img src="${rel.photo}">` : `<span>${getInitials(relName)}</span>`;
     chip.innerHTML = `
       <div class="relation-chip-photo">${photoHtml}</div>
       <div class="relation-chip-info">
-        <div class="relation-chip-name">${escapeHtml(rel.name)}</div>
+        <div class="relation-chip-name">${escapeHtml(relName)}</div>
         <div class="relation-chip-rel">${formatDates(rel) || '—'}</div>
       </div>
       <button class="relation-chip-remove" title="Quitar relación">
@@ -1576,7 +1636,10 @@ function resizeImage(dataUrl, maxSize, callback) {
 $('saveBtn').onclick = () => {
   if (!currentEditingId) return;
   const p = state.people[currentEditingId];
-  p.name = $('fName').value.trim() || 'Sin nombre';
+  p.firstName = $('fFirstName').value.trim();
+  p.lastName1 = $('fLastName1').value.trim();
+  p.lastName2 = $('fLastName2').value.trim();
+  p.name = buildFullName(p.firstName, p.lastName1, p.lastName2) || 'Sin nombre';
   p.nickname = $('fNickname').value.trim();
   p.gender = $('fGender').value;
   p.birthDate = $('fBirthDate').value.trim();
@@ -1586,7 +1649,7 @@ $('saveBtn').onclick = () => {
   p.deathPlace = $('fDeathPlace').value.trim();
   p.occupation = $('fOccupation').value.trim();
   p.notes = $('fNotes').value.trim();
-  $('panelTitle').textContent = p.name;
+  $('panelTitle').textContent = displayName(p);
   state.layoutDirty = true;
   render();
   toast('Cambios guardados');
@@ -1595,7 +1658,7 @@ $('saveBtn').onclick = () => {
 $('deleteBtn').onclick = () => {
   if (!currentEditingId) return;
   const p = state.people[currentEditingId];
-  if (!confirm(`¿Eliminar a ${p.name}? Esta acción se puede deshacer recargando un archivo guardado.`)) return;
+  if (!confirm(`¿Eliminar a ${displayName(p)}? Esta acción se puede deshacer recargando un archivo guardado.`)) return;
   deletePerson(currentEditingId);
   currentEditingId = null;
   state.selectedId = null;
@@ -1619,7 +1682,7 @@ $$('.add-relation-btn').forEach(btn => {
    =========================================================== */
 function handleAddRelation(sourceId, relType) {
   // Show modal: option to create new person or pick existing
-  const sourceName = state.people[sourceId]?.name || '';
+  const sourceName = displayName(state.people[sourceId]);
   const relLabels = {
     parent: 'padre/madre',
     child: 'hijo/a',
@@ -1631,9 +1694,19 @@ function handleAddRelation(sourceId, relType) {
   showModal(`
     <div class="modal-title">Añadir ${label}</div>
     <div class="modal-subtitle">Para <strong>${escapeHtml(sourceName)}</strong></div>
-    <div class="field">
-      <label>Nombre</label>
-      <input type="text" id="newPersonName" placeholder="Nombre completo" autofocus>
+    <div class="field-row field-row-3">
+      <div class="field">
+        <label>Nombre/s</label>
+        <input type="text" id="newPersonFirstName" placeholder="Ej: Antonio" autofocus>
+      </div>
+      <div class="field">
+        <label>Primer apellido</label>
+        <input type="text" id="newPersonLastName1" placeholder="Ej: García">
+      </div>
+      <div class="field">
+        <label>Segundo apellido</label>
+        <input type="text" id="newPersonLastName2" placeholder="Ej: López">
+      </div>
     </div>
     <div class="field-row">
       <div class="field">
@@ -1654,21 +1727,31 @@ function handleAddRelation(sourceId, relType) {
     </div>
   `);
 
-  $('newPersonName').focus();
+  $('newPersonFirstName').focus();
 
   $('modalCancel').onclick = closeModal;
   $('modalCreate').onclick = () => {
-    const name = $('newPersonName').value.trim();
-    if (!name) { $('newPersonName').focus(); return; }
+    const firstName = $('newPersonFirstName').value.trim();
+    const lastName1 = $('newPersonLastName1').value.trim();
+    const lastName2 = $('newPersonLastName2').value.trim();
+    const fullName = buildFullName(firstName, lastName1, lastName2);
+    if (!fullName) { $('newPersonFirstName').focus(); return; }
     const birthYear = $('newPersonBirth').value.trim();
     const deathYear = $('newPersonDeath').value.trim();
     const newP = newPerson({
-      name,
+      name: fullName,
+      firstName,
+      lastName1,
+      lastName2,
       birthDate: birthYear,
       deceased: !!deathYear,
       deathDate: deathYear,
     });
-    linkRelation(sourceId, newP.id, relType);
+    const linked = linkRelation(sourceId, newP.id, relType);
+    if (linked === false) {
+      delete state.people[newP.id];
+      return;
+    }
     closeModal();
     state.layoutDirty = true;
     render();
@@ -1678,16 +1761,18 @@ function handleAddRelation(sourceId, relType) {
   $('pickExistingBtn').onclick = () => showPersonPicker(sourceId, relType);
 
   // Enter to submit
-  $('newPersonName').onkeydown = e => { if (e.key === 'Enter') $('modalCreate').click(); };
+  ['newPersonFirstName', 'newPersonLastName1', 'newPersonLastName2'].forEach(id => {
+    $(id).onkeydown = e => { if (e.key === 'Enter') $('modalCreate').click(); };
+  });
 }
 
 function showPersonPicker(sourceId, relType) {
   const others = Object.values(state.people).filter(p => p.id !== sourceId);
   const items = others.map(p => `
     <div class="person-picker-item" data-id="${p.id}">
-      <div class="relation-chip-photo">${p.photo ? `<img src="${p.photo}">` : `<span>${getInitials(p.name)}</span>`}</div>
+      <div class="relation-chip-photo">${p.photo ? `<img src="${p.photo}">` : `<span>${getInitials(displayName(p))}</span>`}</div>
       <div class="relation-chip-info">
-        <div class="relation-chip-name">${escapeHtml(p.name)}</div>
+        <div class="relation-chip-name">${escapeHtml(displayName(p))}</div>
         <div class="relation-chip-rel">${formatDates(p) || '—'}</div>
       </div>
     </div>
@@ -1703,7 +1788,8 @@ function showPersonPicker(sourceId, relType) {
   $('modalCancel').onclick = closeModal;
   $$('.person-picker-item').forEach(item => {
     item.onclick = () => {
-      linkRelation(sourceId, item.dataset.id, relType);
+      const linked = linkRelation(sourceId, item.dataset.id, relType);
+      if (linked === false) return;
       closeModal();
       state.layoutDirty = true;
       render();
@@ -1718,19 +1804,15 @@ function linkRelation(sourceId, otherId, relType) {
   else if (relType === 'child') addParentChild(sourceId, otherId);
   else if (relType === 'partner') addPartnership(sourceId, otherId);
   else if (relType === 'sibling') {
-    // Add same parents to other person
     const parents = state.relations.parents[sourceId] || [];
     if (parents.length) {
       for (const pp of parents) addParentChild(pp, otherId);
     } else {
-      // No parents on source - create placeholder shared parent? Just link them via a phantom parent isn't ideal.
-      // Simpler: prompt that they need parents first, OR auto-create shared "Sin nombre" parent
-      // Let's auto-create one common parent so layout works
-      const phantomParent = newPerson({ name: 'Sin nombre' });
-      addParentChild(phantomParent.id, sourceId);
-      addParentChild(phantomParent.id, otherId);
+      toast('Para añadir un hermano, primero añade padre o madre a la persona actual');
+      return false;
     }
   }
+  return true;
 }
 
 /* ===========================================================
@@ -1767,14 +1849,15 @@ function shouldShowGuide() {
 
 function showWelcomeModal(force = false) {
   if (!force && !shouldShowGuide()) return;
+  if (!$('modalContent')) return;
   showModal(`
     <div class="guide-badge">Guia de arranque</div>
     <div class="modal-title">Asi se usa Raices</div>
-    <div class="modal-subtitle">Primero plantas una persona, luego van creciendo ramas. La funcionalidad es la misma; ahora vive vestida con lenguaje visual Ntizar Aurora.</div>
+    <div class="modal-subtitle">Primero plantas una persona, luego van creciendo ramas. La app empieza por una sola ficha inicial y el resto se construye desde ahi.</div>
     <div class="guide-grid">
       <div class="guide-card">
         <strong>1. Empieza por una persona</strong>
-        <p>Pulsa <em>Añadir persona</em> y crea la primera ficha del arbol.</p>
+        <p>Pulsa <em>Añadir persona</em> y crea la primera ficha del arbol. Despues, ese boton ya no crea otra raiz aparte.</p>
       </div>
       <div class="guide-card">
         <strong>2. Haz crecer relaciones</strong>
@@ -1809,12 +1892,26 @@ function showWelcomeModal(force = false) {
    ADD PERSON BUTTON (top bar)
    =========================================================== */
 function createFirstPerson() {
+  if (Object.keys(state.people).length) {
+    toast('El árbol ya empezó. Añade el resto desde las tarjetas existentes.');
+    return;
+  }
   showModal(`
     <div class="modal-title">Nueva persona</div>
-    <div class="modal-subtitle">Empieza con quien quieras: tú mismo, un abuelo, un hijo...</div>
-    <div class="field">
-      <label>Nombre completo</label>
-      <input type="text" id="newPersonName" placeholder="Ej: Antonio García López" autofocus>
+    <div class="modal-subtitle">El árbol siempre empieza por una persona. Después el resto sale desde esa primera ficha.</div>
+    <div class="field-row field-row-3">
+      <div class="field">
+        <label>Nombre/s</label>
+        <input type="text" id="newPersonFirstName" placeholder="Ej: Antonio" autofocus>
+      </div>
+      <div class="field">
+        <label>Primer apellido</label>
+        <input type="text" id="newPersonLastName1" placeholder="Ej: García">
+      </div>
+      <div class="field">
+        <label>Segundo apellido</label>
+        <input type="text" id="newPersonLastName2" placeholder="Ej: López">
+      </div>
     </div>
     <div class="field-row">
       <div class="field">
@@ -1831,15 +1928,25 @@ function createFirstPerson() {
       <button class="btn btn-primary" id="modalCreate">Crear</button>
     </div>
   `);
-  $('newPersonName').focus();
+  $('newPersonFirstName').focus();
   $('modalCancel').onclick = closeModal;
   $('modalCreate').onclick = () => {
-    const name = $('newPersonName').value.trim();
-    if (!name) return;
+    const firstName = $('newPersonFirstName').value.trim();
+    const lastName1 = $('newPersonLastName1').value.trim();
+    const lastName2 = $('newPersonLastName2').value.trim();
+    const fullName = buildFullName(firstName, lastName1, lastName2);
+    if (!fullName) {
+      $('newPersonFirstName').focus();
+      return;
+    }
     const birthYear = $('newPersonBirth').value.trim();
     const deathYear = $('newPersonDeath').value.trim();
     const p = newPerson({
-      name, birthDate: birthYear,
+      name: fullName,
+      firstName,
+      lastName1,
+      lastName2,
+      birthDate: birthYear,
       deceased: !!deathYear, deathDate: deathYear
     });
     closeModal();
@@ -1848,7 +1955,9 @@ function createFirstPerson() {
     fitToScreen();
     selectPerson(p.id);
   };
-  $('newPersonName').onkeydown = e => { if (e.key === 'Enter') $('modalCreate').click(); };
+  ['newPersonFirstName', 'newPersonLastName1', 'newPersonLastName2'].forEach(id => {
+    $(id).onkeydown = e => { if (e.key === 'Enter') $('modalCreate').click(); };
+  });
 }
 
 $('addPersonBtn').onclick = createFirstPerson;
@@ -1863,7 +1972,7 @@ $('searchInput').oninput = e => {
   const results = $('searchResults');
   if (!q) { results.classList.remove('open'); return; }
   const matches = Object.values(state.people).filter(p =>
-    p.name.toLowerCase().includes(q) ||
+    displayName(p).toLowerCase().includes(q) ||
     (p.nickname && p.nickname.toLowerCase().includes(q)) ||
     (p.birthPlace && p.birthPlace.toLowerCase().includes(q))
   ).slice(0, 8);
@@ -1872,9 +1981,9 @@ $('searchInput').oninput = e => {
   } else {
     results.innerHTML = matches.map(p => `
       <div class="search-result" data-id="${p.id}">
-        <div class="search-result-photo">${p.photo ? `<img src="${p.photo}">` : `<span>${getInitials(p.name)}</span>`}</div>
+        <div class="search-result-photo">${p.photo ? `<img src="${p.photo}">` : `<span>${getInitials(displayName(p))}</span>`}</div>
         <div>
-          <div class="search-result-name">${escapeHtml(p.name)}</div>
+          <div class="search-result-name">${escapeHtml(displayName(p))}</div>
           <div class="search-result-dates">${formatDates(p) || ''}</div>
         </div>
       </div>
@@ -1955,10 +2064,11 @@ function exportExcel() {
   const wb = XLSX.utils.book_new();
 
   // Sheet 1: People
-  const peopleRows = [['ID', 'Nombre', 'Apodo', 'Sexo', 'Fecha nacimiento', 'Lugar nacimiento', 'Fallecido', 'Fecha fallecimiento', 'Lugar fallecimiento', 'Profesión', 'Notas']];
+  const peopleRows = [['ID', 'Nombre', 'Primer apellido', 'Segundo apellido', 'Nombre completo', 'Apodo', 'Sexo', 'Fecha nacimiento', 'Lugar nacimiento', 'Fallecido', 'Fecha fallecimiento', 'Lugar fallecimiento', 'Profesión', 'Notas']];
   for (const p of Object.values(state.people)) {
+    normalizePerson(p);
     peopleRows.push([
-      p.id, p.name, p.nickname || '', p.gender || '',
+      p.id, p.firstName || '', p.lastName1 || '', p.lastName2 || '', displayName(p), p.nickname || '', p.gender || '',
       p.birthDate || '', p.birthPlace || '',
       p.deceased ? 'Sí' : 'No',
       p.deathDate || '', p.deathPlace || '',
@@ -1966,14 +2076,14 @@ function exportExcel() {
     ]);
   }
   const wsPeople = XLSX.utils.aoa_to_sheet(peopleRows);
-  wsPeople['!cols'] = [{ wch: 8 }, { wch: 25 }, { wch: 15 }, { wch: 8 }, { wch: 16 }, { wch: 22 }, { wch: 10 }, { wch: 16 }, { wch: 22 }, { wch: 20 }, { wch: 40 }];
+  wsPeople['!cols'] = [{ wch: 8 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 28 }, { wch: 15 }, { wch: 8 }, { wch: 16 }, { wch: 22 }, { wch: 10 }, { wch: 16 }, { wch: 22 }, { wch: 20 }, { wch: 40 }];
   XLSX.utils.book_append_sheet(wb, wsPeople, 'Personas');
 
   // Sheet 2: Parent-child
   const parentRows = [['ID Hijo', 'Nombre Hijo', 'ID Padre/Madre', 'Nombre Padre/Madre']];
   for (const [cid, parents] of Object.entries(state.relations.parents)) {
     for (const pid of parents) {
-      parentRows.push([cid, state.people[cid]?.name || '', pid, state.people[pid]?.name || '']);
+      parentRows.push([cid, displayName(state.people[cid]), pid, displayName(state.people[pid])]);
     }
   }
   const wsParents = XLSX.utils.aoa_to_sheet(parentRows);
@@ -1988,7 +2098,7 @@ function exportExcel() {
       const key = [aId, bId].sort().join('-');
       if (seen.has(key)) continue;
       seen.add(key);
-      partnerRows.push([aId, state.people[aId]?.name || '', bId, state.people[bId]?.name || '']);
+      partnerRows.push([aId, displayName(state.people[aId]), bId, displayName(state.people[bId])]);
     }
   }
   const wsPartners = XLSX.utils.aoa_to_sheet(partnerRows);
@@ -2051,6 +2161,7 @@ function importJSON(file) {
       if (!data.people) throw new Error('Archivo inválido');
       // Merge or replace? Replace.
       state.people = data.people || {};
+      Object.values(state.people).forEach(normalizePerson);
       state.relations = data.relations || { parents: {}, partners: {} };
       state.nextId = data.nextId || (Object.keys(state.people).length + 1);
       state.layoutDirty = true;
@@ -2085,7 +2196,10 @@ function importExcel(file) {
         const idx = (name) => headers.findIndex(h => String(h).toLowerCase().includes(name.toLowerCase()));
         const cols = {
           id: idx('id'),
-          name: idx('nombre'),
+          firstName: idx('nombre/s') !== -1 ? idx('nombre/s') : idx('nombre'),
+          lastName1: idx('primer apellido'),
+          lastName2: idx('segundo apellido'),
+          fullName: idx('nombre completo'),
           nickname: idx('apodo'),
           gender: idx('sexo'),
           birthDate: idx('fecha nacimiento'),
@@ -2105,7 +2219,10 @@ function importExcel(file) {
           if (!isNaN(num) && num >= state.nextId) state.nextId = num + 1;
           people[id] = {
             id,
-            name: String(row[cols.name] || 'Sin nombre'),
+            name: String((cols.fullName !== -1 ? row[cols.fullName] : '') || (cols.firstName !== -1 ? row[cols.firstName] : '') || 'Sin nombre'),
+            firstName: String(cols.firstName !== -1 ? (row[cols.firstName] || '') : ''),
+            lastName1: String(cols.lastName1 !== -1 ? (row[cols.lastName1] || '') : ''),
+            lastName2: String(cols.lastName2 !== -1 ? (row[cols.lastName2] || '') : ''),
             nickname: String(row[cols.nickname] || ''),
             gender: String(row[cols.gender] || ''),
             birthDate: String(row[cols.birthDate] || ''),
@@ -2118,6 +2235,7 @@ function importExcel(file) {
             photo: '',
             x: 0, y: 0,
           };
+          normalizePerson(people[id]);
         }
       }
 

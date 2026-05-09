@@ -2,7 +2,7 @@
 
 Donde los abuelos florecen, los primos aparecen por sorpresa y el JSON sale del navegador con uniforme militar de fecha y hora para no volver a perderse en la carpeta de descargas.
 
-![Estado](https://img.shields.io/badge/status-listo%20para%20ramificar-3b82f6) ![Estilo](https://img.shields.io/badge/look-Ntizar%20Aurora-f97316) ![Deploy](https://img.shields.io/badge/pages-GitHub%20Pages-1d4ed8)
+![Estado](https://img.shields.io/badge/status-listo%20para%20ramificar-3b82f6) ![Estilo](https://img.shields.io/badge/look-azules%20y%20dorados-f97316) ![Deploy](https://img.shields.io/badge/pages-GitHub%20Pages-1d4ed8)
 
 ## Que Es
 
@@ -14,7 +14,7 @@ Donde los abuelos florecen, los primos aparecen por sorpresa y el JSON sale del 
 - Exportas el arbol a `JSON` o `Excel`.
 - Lo imprimes cuando te entra el espiritu archivista de monasterio premium.
 
-La interfaz mantiene toda la funcionalidad original, pero ahora vestida con capa visual **Ntizar Aurora**: superficies suaves, acentos de marca y una atmosfera mas luminosa que una reunion familiar con canapes buenos.
+La interfaz mantiene toda la funcionalidad original, pero ahora con una capa visual mas limpia en azules y dorados, sin meter un sistema CSS externo que altere el comportamiento del editor.
 
 ## Como Se Usa
 
@@ -43,7 +43,7 @@ Eso permite ordenar copias por version sin tener que llamar a los archivos `fina
 - HTML, CSS y JavaScript vanilla.
 - `xlsx` para importar y exportar Excel.
 - GitHub Pages para desplegar la app.
-- Ntizar Aurora v5.1 como capa visual de marca.
+- Capa visual local en `aurora.css`, centrada en colores y detalles de interfaz.
 
 ## Uso Local
 

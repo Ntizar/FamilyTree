@@ -1,394 +1,189 @@
-body.nz {
-  --bg: var(--nz-surface-page);
-  --bg-elevated: color-mix(in srgb, var(--nz-surface-raised) 96%, white);
-  --ink: var(--nz-text-strong);
-  --ink-soft: var(--nz-text-default);
-  --ink-muted: var(--nz-text-muted);
-  --line: var(--nz-border-soft);
-  --line-soft: color-mix(in srgb, var(--nz-surface-soft) 88%, white);
-  --accent: var(--nz-color-brand);
-  --accent-soft: color-mix(in srgb, var(--nz-color-brand-soft) 32%, white);
-  --warm: var(--nz-color-accent);
-  --shadow-sm: var(--nz-shadow-sm);
-  --shadow-md: var(--nz-shadow-md);
-  --shadow-lg: var(--nz-shadow-lg);
-  --radius: var(--nz-radius-xl);
-  --radius-sm: var(--nz-radius-md);
-  position: relative;
+.family-tree-skin {
   background:
-    radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--nz-color-brand) 16%, transparent), transparent 30%),
-    radial-gradient(circle at 88% 14%, color-mix(in srgb, var(--nz-color-accent) 15%, transparent), transparent 28%),
-    linear-gradient(180deg, color-mix(in srgb, var(--nz-surface-page) 92%, white), var(--nz-surface-page));
-  color: var(--ink);
+    radial-gradient(circle at 12% 18%, rgba(53, 106, 216, 0.08), transparent 28%),
+    radial-gradient(circle at 88% 12%, rgba(241, 168, 75, 0.09), transparent 24%),
+    linear-gradient(180deg, #f8fbff, #f3f7fd 55%, #eef4fc);
 }
 
-body.nz::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
+.family-tree-skin .topbar {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom-color: rgba(53, 106, 216, 0.12);
+  box-shadow: 0 8px 24px rgba(26, 46, 84, 0.06);
+  backdrop-filter: blur(12px);
+}
+
+.family-tree-skin .brand-sub {
+  color: #6c7b92;
+}
+
+.family-tree-skin .btn-primary {
+  background: linear-gradient(135deg, #356ad8, #5d87e5);
+  border-color: #356ad8;
+}
+
+.family-tree-skin .btn-primary:hover {
+  background: linear-gradient(135deg, #2c5bc0, #4c78da);
+}
+
+.family-tree-skin .btn:hover,
+.family-tree-skin .add-relation-btn:hover,
+.family-tree-skin .relation-chip:hover,
+.family-tree-skin .search-result:hover,
+.family-tree-skin .menu-item:hover,
+.family-tree-skin .zoom-controls button:hover,
+.family-tree-skin .person-picker-item:hover {
+  background: #edf4ff;
+}
+
+.family-tree-skin .canvas-wrap {
   background:
-    radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--nz-color-brand) 18%, transparent), transparent 36%),
-    radial-gradient(circle at 100% 10%, color-mix(in srgb, var(--nz-color-accent) 16%, transparent), transparent 34%);
-  opacity: 0.8;
-  z-index: 0;
+    radial-gradient(circle at 1px 1px, rgba(53, 106, 216, 0.14) 1px, transparent 0),
+    radial-gradient(circle at 20% 0%, rgba(53, 106, 216, 0.05), transparent 24%),
+    radial-gradient(circle at 85% 10%, rgba(241, 168, 75, 0.06), transparent 22%);
+  background-size: 24px 24px, auto, auto;
+  background-color: #f6f9ff;
 }
 
-body.nz > * {
-  position: relative;
-  z-index: 1;
+.family-tree-skin .person {
+  border-color: #dbe4f0;
+  background: rgba(255, 255, 255, 0.96);
 }
 
-body.nz .topbar {
-  gap: 18px;
-  padding: 14px 22px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--nz-surface-raised) 96%, white), color-mix(in srgb, var(--nz-surface-base) 94%, white));
-  border-bottom: 1px solid color-mix(in srgb, var(--nz-color-brand) 14%, var(--line));
-  box-shadow: var(--nz-shadow-sm);
-  backdrop-filter: blur(18px);
+.family-tree-skin .person:hover {
+  border-color: #bfd0ea;
 }
 
-body.nz .brand {
-  gap: 12px;
-  color: var(--ink);
+.family-tree-skin .person.selected {
+  border-color: #356ad8;
+  box-shadow: 0 0 0 3px #e7efff, 0 6px 20px rgba(22, 32, 51, 0.08);
 }
 
-body.nz .brand-mark {
-  width: 34px;
-  height: 34px;
-  color: var(--accent);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--nz-surface-brand-soft) 82%, white);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--nz-color-brand) 12%, transparent), var(--nz-shadow-brand);
+.family-tree-skin .person-photo,
+.family-tree-skin .relation-chip-photo,
+.family-tree-skin .search-result-photo {
+  background: #edf4ff;
 }
 
-body.nz .brand-mark svg path[fill] {
-  fill: currentColor;
+.family-tree-skin .connections path {
+  stroke: #bccbdd;
 }
 
-body.nz .brand-mark svg path[stroke] {
-  stroke: currentColor;
+.family-tree-skin .connections path.partner {
+  stroke: #f1a84b;
 }
 
-body.nz .brand-sub {
-  color: var(--ink-muted);
-  border-left-color: color-mix(in srgb, var(--nz-color-brand) 14%, var(--line));
+.family-tree-skin .panel,
+.family-tree-skin .modal,
+.family-tree-skin .menu,
+.family-tree-skin .search-results,
+.family-tree-skin .zoom-controls {
+  background: rgba(255, 255, 255, 0.96);
 }
 
-body.nz .toolbar {
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.family-tree-skin .field input:focus,
+.family-tree-skin .field textarea:focus,
+.family-tree-skin .field select:focus,
+.family-tree-skin .search-box input:focus {
+  border-color: #356ad8;
+  box-shadow: 0 0 0 3px #e7efff;
 }
 
-body.nz .btn {
-  border-color: color-mix(in srgb, var(--nz-color-brand) 12%, var(--line));
-  background: color-mix(in srgb, var(--nz-surface-raised) 96%, white);
-  box-shadow: var(--shadow-sm);
-}
-
-body.nz .btn:hover {
-  background: color-mix(in srgb, var(--nz-surface-brand-soft) 70%, white);
-  border-color: var(--nz-border-default);
-}
-
-body.nz .btn-primary {
-  color: var(--nz-text-on-brand);
-  background: var(--nz-gradient-brand);
-  border-color: color-mix(in srgb, var(--nz-color-brand) 40%, transparent);
-  box-shadow: var(--nz-shadow-brand);
-}
-
-body.nz .btn-primary:hover {
-  color: var(--nz-text-on-brand);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--nz-color-brand) 90%, white), color-mix(in srgb, var(--nz-color-accent) 20%, var(--nz-color-brand)));
-}
-
-body.nz .btn-danger:hover {
-  background: color-mix(in srgb, var(--nz-color-accent) 12%, white);
-  border-color: color-mix(in srgb, var(--nz-color-accent) 20%, var(--line));
-}
-
-body.nz .canvas-wrap {
-  background:
-    radial-gradient(circle at 20% 10%, color-mix(in srgb, var(--nz-color-brand) 10%, transparent), transparent 26%),
-    radial-gradient(circle at 84% 0%, color-mix(in srgb, var(--nz-color-accent) 10%, transparent), transparent 24%),
-    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--nz-color-brand) 18%, transparent) 1px, transparent 0);
-  background-size: auto, auto, 24px 24px;
-  background-color: color-mix(in srgb, var(--bg) 96%, white);
-}
-
-body.nz .person,
-body.nz .panel,
-body.nz .modal,
-body.nz .zoom-controls,
-body.nz .menu,
-body.nz .search-results {
-  background: color-mix(in srgb, var(--bg-elevated) 94%, white);
-  backdrop-filter: blur(16px);
-}
-
-body.nz .person {
-  border-color: color-mix(in srgb, var(--nz-color-brand) 12%, var(--line));
-  box-shadow: var(--shadow-sm);
-}
-
-body.nz .person:hover {
-  border-color: var(--nz-border-default);
-  box-shadow: var(--shadow-md);
-}
-
-body.nz .person.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nz-color-brand-soft) 36%, white), var(--nz-shadow-brand);
-}
-
-body.nz .person-photo {
-  background: color-mix(in srgb, var(--nz-surface-brand-soft) 65%, white);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--nz-color-brand) 10%, transparent);
-}
-
-body.nz .add-btn {
-  border-color: color-mix(in srgb, var(--nz-color-brand) 12%, var(--line));
-}
-
-body.nz .add-btn:hover {
-  color: var(--nz-text-on-brand);
-}
-
-body.nz .connections path {
-  stroke: color-mix(in srgb, var(--nz-color-brand) 18%, var(--line));
-}
-
-body.nz .connections path.partner {
-  stroke: color-mix(in srgb, var(--nz-color-accent) 82%, var(--nz-color-brand));
-}
-
-body.nz .empty-state {
-  width: min(460px, calc(100% - 32px));
+.family-tree-skin .empty-state {
   padding: 28px 24px;
-  border-radius: calc(var(--radius) + 4px);
-  background: color-mix(in srgb, var(--bg-elevated) 92%, white);
-  border: 1px solid color-mix(in srgb, var(--nz-color-brand) 12%, var(--line));
-  box-shadow: var(--shadow-lg);
+  border: 1px solid #dbe4f0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 40px rgba(22, 32, 51, 0.1);
 }
 
-body.nz .panel {
-  border-left-color: color-mix(in srgb, var(--nz-color-brand) 14%, var(--line));
-  box-shadow: -12px 0 32px color-mix(in srgb, var(--nz-color-brand) 10%, transparent);
+.family-tree-skin .toast {
+  background: linear-gradient(135deg, #356ad8, #4b78d7);
 }
 
-body.nz .panel-header,
-body.nz .panel-footer,
-body.nz .section-title {
-  border-color: color-mix(in srgb, var(--nz-color-brand) 12%, var(--line));
-}
-
-body.nz .photo-upload-circle {
-  background: color-mix(in srgb, var(--nz-surface-soft) 74%, white);
-  border-color: color-mix(in srgb, var(--nz-color-brand) 16%, var(--line));
-}
-
-body.nz .field input,
-body.nz .field textarea,
-body.nz .field select,
-body.nz .search-box input {
-  background: color-mix(in srgb, var(--nz-surface-base) 94%, white);
-  border-color: color-mix(in srgb, var(--nz-color-brand) 10%, var(--line));
-}
-
-body.nz .field input:focus,
-body.nz .field textarea:focus,
-body.nz .field select:focus,
-body.nz .search-box input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nz-color-brand-soft) 40%, white);
-}
-
-body.nz .zoom-controls,
-body.nz .modal,
-body.nz .menu,
-body.nz .search-results {
-  border-color: color-mix(in srgb, var(--nz-color-brand) 12%, var(--line));
-  box-shadow: var(--shadow-md);
-}
-
-body.nz .relation-chip,
-body.nz .search-result,
-body.nz .person-picker-item,
-body.nz .add-relation-btn,
-body.nz .zoom-controls button,
-body.nz .menu-item {
-  transition: all var(--nz-duration-fast) var(--nz-ease-standard);
-}
-
-body.nz .relation-chip:hover,
-body.nz .search-result:hover,
-body.nz .person-picker-item:hover,
-body.nz .zoom-controls button:hover,
-body.nz .menu-item:hover,
-body.nz .add-relation-btn:hover {
-  background: color-mix(in srgb, var(--nz-surface-brand-soft) 64%, white);
-}
-
-body.nz .toast {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--nz-color-brand) 92%, white), color-mix(in srgb, var(--nz-color-accent) 18%, var(--nz-color-brand)));
-  color: var(--nz-text-on-brand);
-}
-
-body.nz .guide-badge {
+.family-tree-skin .guide-badge {
   display: inline-flex;
   align-items: center;
   margin-bottom: 12px;
   padding: 6px 10px;
   border-radius: 999px;
+  background: #edf4ff;
+  color: #356ad8;
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--nz-surface-brand-soft) 74%, white);
+  text-transform: uppercase;
 }
 
-body.nz .guide-grid {
+.family-tree-skin .guide-grid {
   display: grid;
   gap: 10px;
   margin: 18px 0;
 }
 
-body.nz .guide-card {
+.family-tree-skin .guide-card {
   padding: 12px 14px;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--nz-surface-soft) 68%, white);
-  border: 1px solid color-mix(in srgb, var(--nz-color-brand) 12%, var(--line));
+  border-radius: 10px;
+  background: #f7faff;
+  border: 1px solid #dbe4f0;
 }
 
-body.nz .guide-card strong {
+.family-tree-skin .guide-card strong {
   display: block;
   margin-bottom: 4px;
-  color: var(--ink);
 }
 
-body.nz .guide-card p,
-body.nz .guide-tip {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ink-soft);
-}
-
-body.nz .guide-tip {
+.family-tree-skin .guide-tip {
   margin-top: 8px;
   padding: 12px 14px;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--nz-color-accent) 10%, white);
-  border: 1px solid color-mix(in srgb, var(--nz-color-accent) 18%, var(--line));
+  border-radius: 10px;
+  background: #fff6ea;
+  border: 1px solid #f4d9b2;
+  color: #5d4a2a;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 @media (max-width: 980px) {
-  body.nz .topbar {
+  .family-tree-skin .topbar {
     align-items: flex-start;
     flex-wrap: wrap;
-    padding: 16px;
   }
 
-  body.nz .toolbar {
+  .family-tree-skin .toolbar {
     width: 100%;
     justify-content: flex-start;
     gap: 8px;
   }
 
-  body.nz .search-box {
+  .family-tree-skin .search-box {
     width: 100%;
   }
 
-  body.nz .divider-v {
+  .family-tree-skin .divider-v {
     display: none;
-  }
-
-  body.nz .zoom-controls {
-    left: auto;
-    right: 16px;
-    bottom: 16px;
-    flex-direction: row;
-  }
-
-  body.nz .zoom-controls button,
-  body.nz .zoom-level {
-    border-bottom: none;
-    border-right: 1px solid var(--line);
-  }
-
-  body.nz .zoom-controls button:last-child {
-    border-right: none;
-  }
-
-  body.nz .zoom-level {
-    display: flex;
-    align-items: center;
-    padding: 0 10px;
-  }
-
-  body.nz .panel {
-    width: min(100%, 420px);
   }
 }
 
 @media (max-width: 640px) {
-  body.nz .topbar {
-    padding: 14px;
-  }
-
-  body.nz .brand {
-    font-size: 20px;
-  }
-
-  body.nz .brand-sub {
+  .family-tree-skin .brand-sub {
     display: none;
   }
 
-  body.nz .toolbar {
+  .family-tree-skin .toolbar {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  body.nz .search-box {
+  .family-tree-skin .search-box {
     grid-column: 1 / -1;
+  }
+
+  .family-tree-skin .toolbar > div[style="position: relative;"] {
     width: 100%;
   }
 
-  body.nz .toolbar > div[style="position: relative;"] {
-    width: 100%;
-  }
-
-  body.nz .toolbar .btn {
+  .family-tree-skin .toolbar .btn {
     width: 100%;
     justify-content: center;
-  }
-
-  body.nz .panel {
-    width: 100%;
-  }
-
-  body.nz .panel-footer {
-    position: sticky;
-    bottom: 0;
-    background: color-mix(in srgb, var(--bg-elevated) 96%, white);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  body.nz .btn,
-  body.nz .person,
-  body.nz .add-btn,
-  body.nz .relation-chip,
-  body.nz .search-result,
-  body.nz .person-picker-item,
-  body.nz .add-relation-btn,
-  body.nz .zoom-controls button,
-  body.nz .menu-item,
-  body.nz .modal-backdrop,
-  body.nz .modal,
-  body.nz .toast {
-    transition: none;
   }
 }
