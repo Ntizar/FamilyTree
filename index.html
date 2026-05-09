@@ -465,6 +465,17 @@ body { display: flex; flex-direction: column; }
   font-size: 11px;
   color: var(--ink-muted);
 }
+.relation-chip-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  margin-right: 5px;
+}
 .relation-chip-remove {
   background: none; border: none;
   cursor: pointer;
@@ -642,6 +653,11 @@ body { display: flex; flex-direction: column; }
 }
 .person-picker-item:hover { background: var(--line-soft); }
 .person-picker-item.disabled { opacity: 0.4; pointer-events: none; }
+.person-picker-hint {
+  padding: 8px 2px 12px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
 
 /* ========== TOAST ========== */
 .toast {
@@ -694,10 +710,26 @@ body { display: flex; flex-direction: column; }
 
 /* ========== PRINT STYLES ========== */
 @media print {
-  body { background: white; }
-  .topbar, .zoom-controls, .panel, .add-btn, .empty-state { display: none !important; }
-  .canvas-wrap {
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
     background: white !important;
+  }
+  body { display: block !important; }
+  .topbar, .zoom-controls, .panel, .add-btn, .empty-state, .modal-backdrop, .toast { display: none !important; }
+  .canvas-wrap {
+    position: static !important;
+    height: auto !important;
+    min-height: 100vh;
+    background: white !important;
+    overflow: visible !important;
+  }
+  .canvas {
+    position: relative !important;
+    cursor: default !important;
+  }
+  .canvas-inner {
+    position: relative !important;
     overflow: visible !important;
   }
   .person {
@@ -785,7 +817,8 @@ body { display: flex; flex-direction: column; }
       <div class="menu" id="printMenu">
         <div class="menu-section">Imprimir</div>
         <div class="menu-item" data-print="all">Todo el árbol</div>
-        <div class="menu-item" data-print="selected">Solo selección y descendientes</div>
+        <div class="menu-item" data-print="selected">Selección y rama directa</div>
+        <div class="menu-item" data-print="descendants">Selección y descendientes</div>
         <div class="menu-divider"></div>
         <div class="menu-section">Filtrar por época</div>
         <div class="menu-item" data-print="filter">Personas vivas en un año...</div>
@@ -923,7 +956,9 @@ body { display: flex; flex-direction: column; }
 
     <div class="section-title">Padres</div>
     <div class="relations-list" id="parentsList"></div>
-    <button class="add-relation-btn" data-rel="parent">+ Añadir padre o madre</button>
+    <button class="add-relation-btn" data-rel="father">+ Añadir padre</button>
+    <button class="add-relation-btn" data-rel="mother">+ Añadir madre</button>
+    <button class="add-relation-btn" data-rel="untypedParent">+ Añadir progenitor sin especificar</button>
 
     <div class="section-title">Parejas</div>
     <div class="relations-list" id="partnersList"></div>
@@ -939,6 +974,7 @@ body { display: flex; flex-direction: column; }
   </div>
   <div class="panel-footer">
     <button class="btn btn-danger" id="deleteBtn">Eliminar</button>
+    <button class="btn" id="viewOptionsBtn">Ver ramas</button>
     <button class="btn btn-primary" id="saveBtn" style="flex: 2;">Guardar cambios</button>
   </div>
 </aside>
@@ -963,13 +999,15 @@ body { display: flex; flex-direction: column; }
 const state = {
   people: {},        // id -> person object
   relations: {       // adjacency lists
-    parents: {},     // childId -> [parentId, parentId]
+    parents: {},     // childId -> [{ id: parentId, role: 'father'|'mother'|'parent' }]
     partners: {},    // personId -> [partnerId, ...]
   },
   selectedId: null,
+  viewMode: 'all',
+  focusId: null,
+  visibleFilter: null,
   view: { x: 0, y: 0, scale: 1 },
   nextId: 1,
-  pendingRelation: null, // when adding a person via context, this stores relationship info
   layoutDirty: true,
 };
 
@@ -1045,6 +1083,131 @@ function displayName(person) {
   return normalizePerson(person)?.name || 'Sin nombre';
 }
 
+function relationRoleLabel(role) {
+  return role === 'father' ? 'Padre' : role === 'mother' ? 'Madre' : 'Progenitor';
+}
+
+function roleForRelType(relType) {
+  return relType === 'father' || relType === 'mother' ? relType : 'parent';
+}
+
+function isParentRelType(relType) {
+  return relType === 'parent' || relType === 'father' || relType === 'mother' || relType === 'untypedParent';
+}
+
+function shouldInferParentRole(relType) {
+  return relType === undefined || relType === null || relType === 'parent';
+}
+
+function genderForRelType(relType) {
+  if (relType === 'father') return 'M';
+  if (relType === 'mother') return 'F';
+  return '';
+}
+
+function normalizeParentEntry(entry) {
+  if (!entry) return null;
+  if (typeof entry === 'string') return { id: entry, role: 'parent' };
+  if (typeof entry === 'number') return { id: String(entry), role: 'parent' };
+  if (typeof entry === 'object' && entry.id) {
+    return { id: String(entry.id), role: normalizeRole(entry.role) };
+  }
+  return null;
+}
+
+function normalizeRole(role) {
+  const value = String(role || '').toLowerCase();
+  if (value === 'father' || value === 'padre') return 'father';
+  if (value === 'mother' || value === 'madre') return 'mother';
+  return 'parent';
+}
+
+function inferRoleFromGender(person) {
+  if (person?.gender === 'M') return 'father';
+  if (person?.gender === 'F') return 'mother';
+  return 'parent';
+}
+
+function normalizeRelations(relations = {}, people = state.people) {
+  const normalized = { parents: {}, partners: {} };
+  const validPeople = people || {};
+  const rawParents = relations.parents || {};
+  for (const [childId, entries] of Object.entries(rawParents)) {
+    if (!validPeople[childId]) continue;
+    const list = Array.isArray(entries) ? entries : Object.values(entries || {});
+    for (const entry of list) {
+      const normalizedEntry = normalizeParentEntry(entry);
+      if (!normalizedEntry || !validPeople[normalizedEntry.id] || normalizedEntry.id === childId) continue;
+      if ((typeof entry === 'string' || typeof entry === 'number') && normalizedEntry.role === 'parent') {
+        normalizedEntry.role = inferRoleFromGender(validPeople[normalizedEntry.id]);
+      }
+      if (!normalized.parents[childId]) normalized.parents[childId] = [];
+      const existing = normalized.parents[childId].find(p => p.id === normalizedEntry.id);
+      if (existing) {
+        if (existing.role === 'parent' && normalizedEntry.role !== 'parent') existing.role = normalizedEntry.role;
+        continue;
+      }
+      if (normalizedEntry.role !== 'parent' && normalized.parents[childId].some(p => p.role === normalizedEntry.role)) continue;
+      if (normalized.parents[childId].length < 2) normalized.parents[childId].push(normalizedEntry);
+    }
+  }
+
+  const rawPartners = relations.partners || {};
+  for (const [aId, partners] of Object.entries(rawPartners)) {
+    if (!validPeople[aId]) continue;
+    const list = Array.isArray(partners) ? partners : Object.values(partners || {});
+    for (const partner of list) {
+      const bId = typeof partner === 'object' ? String(partner.id || '') : String(partner || '');
+      if (!bId || !validPeople[bId] || bId === aId) continue;
+      if (!normalized.partners[aId]) normalized.partners[aId] = [];
+      if (!normalized.partners[bId]) normalized.partners[bId] = [];
+      if (!normalized.partners[aId].includes(bId)) normalized.partners[aId].push(bId);
+      if (!normalized.partners[bId].includes(aId)) normalized.partners[bId].push(aId);
+    }
+  }
+  return normalized;
+}
+
+function parentEntries(id) {
+  const current = state.relations.parents[id] || [];
+  return current.map(normalizeParentEntry).filter(Boolean);
+}
+
+function visibleIds() {
+  const ids = new Set(Object.keys(state.people));
+  if (state.visibleFilter) return new Set([...ids].filter(id => state.visibleFilter.has(id)));
+  if (state.viewMode !== 'direct' || !state.focusId || !state.people[state.focusId]) return ids;
+  return getDirectBranchIds(state.focusId);
+}
+
+function getDirectBranchIds(rootId) {
+  const keep = new Set([rootId]);
+  const ancestors = [rootId];
+  while (ancestors.length) {
+    const id = ancestors.shift();
+    for (const parent of parentEntries(id)) {
+      if (!keep.has(parent.id)) {
+        keep.add(parent.id);
+        ancestors.push(parent.id);
+      }
+    }
+  }
+  const descendants = [rootId];
+  while (descendants.length) {
+    const id = descendants.shift();
+    for (const child of getChildren(id)) {
+      if (!keep.has(child.id)) {
+        keep.add(child.id);
+        descendants.push(child.id);
+      }
+    }
+  }
+  for (const id of [...keep]) {
+    for (const partner of getPartners(id)) keep.add(partner.id);
+  }
+  return keep;
+}
+
 function getInitials(name) {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
@@ -1070,11 +1233,11 @@ function extractYear(s) {
 }
 
 function getParents(id) {
-  return (state.relations.parents[id] || []).map(pid => state.people[pid]).filter(Boolean);
+  return parentEntries(id).map(parent => state.people[parent.id]).filter(Boolean);
 }
 function getChildren(id) {
   return Object.entries(state.relations.parents)
-    .filter(([cid, parents]) => parents.includes(id))
+    .filter(([cid, parents]) => parents.map(normalizeParentEntry).filter(Boolean).some(parent => parent.id === id))
     .map(([cid]) => state.people[cid])
     .filter(Boolean);
 }
@@ -1082,32 +1245,51 @@ function getPartners(id) {
   return (state.relations.partners[id] || []).map(pid => state.people[pid]).filter(Boolean);
 }
 function getSiblings(id) {
-  const parents = state.relations.parents[id] || [];
+  const parents = parentEntries(id).map(parent => parent.id);
   if (!parents.length) return [];
   const sibs = new Set();
   for (const [cid, ps] of Object.entries(state.relations.parents)) {
-    if (cid !== id && ps.some(p => parents.includes(p))) sibs.add(cid);
+    const otherParents = ps.map(normalizeParentEntry).filter(Boolean).map(parent => parent.id);
+    if (cid !== id && otherParents.some(p => parents.includes(p))) sibs.add(cid);
   }
   return [...sibs].map(sid => state.people[sid]).filter(Boolean);
 }
 
-function addParentChild(parentId, childId) {
+function addParentChild(parentId, childId, role = 'parent') {
+  if (!state.people[parentId] || !state.people[childId] || parentId === childId) return false;
+  role = shouldInferParentRole(role) ? inferRoleFromGender(state.people[parentId]) : roleForRelType(role);
   if (!state.relations.parents[childId]) state.relations.parents[childId] = [];
-  if (!state.relations.parents[childId].includes(parentId)) {
-    if (state.relations.parents[childId].length >= 2) return false;
-    state.relations.parents[childId].push(parentId);
+  state.relations.parents[childId] = state.relations.parents[childId].map(normalizeParentEntry).filter(Boolean);
+  const parents = state.relations.parents[childId];
+  const existing = parents.find(p => p.id === parentId);
+  if (existing) {
+    if (existing.role === 'parent' && role !== 'parent') existing.role = role;
+    return true;
   }
+  if (role !== 'parent' && parents.some(p => p.role === role)) {
+    toast(`Esta persona ya tiene ${role === 'father' ? 'padre' : 'madre'}`);
+    return false;
+  }
+  if (parents.length >= 2) {
+    toast('Cada persona puede tener como máximo 2 progenitores');
+    return false;
+  }
+  parents.push({ id: parentId, role });
   return true;
 }
 function addPartnership(a, b) {
+  if (!state.people[a] || !state.people[b] || a === b) return false;
   if (!state.relations.partners[a]) state.relations.partners[a] = [];
   if (!state.relations.partners[b]) state.relations.partners[b] = [];
   if (!state.relations.partners[a].includes(b)) state.relations.partners[a].push(b);
   if (!state.relations.partners[b].includes(a)) state.relations.partners[b].push(a);
+  return true;
 }
 function removeParentChild(parentId, childId) {
   if (state.relations.parents[childId]) {
-    state.relations.parents[childId] = state.relations.parents[childId].filter(p => p !== parentId);
+    state.relations.parents[childId] = state.relations.parents[childId]
+      .map(normalizeParentEntry)
+      .filter(p => p && p.id !== parentId);
     if (!state.relations.parents[childId].length) delete state.relations.parents[childId];
   }
 }
@@ -1121,12 +1303,18 @@ function deletePerson(id) {
   delete state.relations.parents[id];
   delete state.relations.partners[id];
   for (const cid in state.relations.parents) {
-    state.relations.parents[cid] = state.relations.parents[cid].filter(p => p !== id);
+    state.relations.parents[cid] = state.relations.parents[cid]
+      .map(normalizeParentEntry)
+      .filter(p => p && p.id !== id);
     if (!state.relations.parents[cid].length) delete state.relations.parents[cid];
   }
   for (const pid in state.relations.partners) {
     state.relations.partners[pid] = state.relations.partners[pid].filter(p => p !== id);
     if (!state.relations.partners[pid].length) delete state.relations.partners[pid];
+  }
+  if (state.focusId === id) {
+    state.viewMode = 'all';
+    state.focusId = null;
   }
 }
 
@@ -1134,12 +1322,13 @@ function deletePerson(id) {
    LAYOUT — Generation-based with sibling clustering
    =========================================================== */
 function computeLayout() {
-  const ids = Object.keys(state.people);
+  const ids = [...visibleIds()];
   if (!ids.length) return;
+  const active = new Set(ids);
 
   // Compute generations via BFS from "roots" (people with no parents)
   const generation = {};
-  const roots = ids.filter(id => !(state.relations.parents[id] || []).length);
+  const roots = ids.filter(id => !parentEntries(id).some(parent => active.has(parent.id)));
 
   // BFS down: each child = max(parent gen) + 1
   // Use iterative approach until stable
@@ -1150,7 +1339,7 @@ function computeLayout() {
   while (changed && safety-- > 0) {
     changed = false;
     for (const id of ids) {
-      const parents = state.relations.parents[id] || [];
+      const parents = parentEntries(id).map(parent => parent.id).filter(parentId => active.has(parentId));
       if (!parents.length) continue;
       const parentGens = parents.map(p => generation[p]).filter(g => g !== null);
       if (!parentGens.length) continue;
@@ -1248,7 +1437,7 @@ function computeLayout() {
       // Compute each person's parents' average X
       const ideal = {};
       for (const id of list) {
-        const parents = state.relations.parents[id] || [];
+        const parents = parentEntries(id).map(parent => parent.id).filter(parentId => active.has(parentId));
         if (!parents.length) continue;
         const avgX = parents.reduce((s, p) => s + (positions[p]?.x ?? 0), 0) / parents.length;
         ideal[id] = avgX;
@@ -1285,9 +1474,11 @@ function render() {
 
   const ids = Object.keys(state.people);
   $('emptyState').style.display = ids.length ? 'none' : 'block';
+  const visible = visibleIds();
 
   // Render cards
   for (const id of ids) {
+    if (!visible.has(id)) continue;
     const p = state.people[id];
     const el = renderPersonCard(p);
     inner.appendChild(el);
@@ -1321,7 +1512,7 @@ function renderPersonCard(p) {
     <div class="person-name">${escapeHtml(fullName)}</div>
     ${dates ? `<div class="person-dates">${dates}</div>` : ''}
     ${place ? `<div class="person-place">${escapeHtml(place)}</div>` : ''}
-    <button class="add-btn add-btn-top" data-add="parent" title="Añadir padre/madre">↑<span class="add-tooltip">Añadir padre/madre</span></button>
+    <button class="add-btn add-btn-top" data-add="parent" title="Añadir progenitor">↑<span class="add-tooltip">Añadir progenitor</span></button>
     <button class="add-btn add-btn-bottom" data-add="child" title="Añadir hijo/a">↓<span class="add-tooltip">Añadir hijo/a</span></button>
     <button class="add-btn add-btn-left" data-add="sibling" title="Añadir hermano/a">↔<span class="add-tooltip">Añadir hermano/a</span></button>
     <button class="add-btn add-btn-right" data-add="partner" title="Añadir pareja">♥<span class="add-tooltip">Añadir pareja</span></button>
@@ -1343,6 +1534,7 @@ function renderPersonCard(p) {
 function renderConnections() {
   const svg = $('connections');
   svg.innerHTML = '';
+  const visible = visibleIds();
 
   const offsetX = 10000;
   const offsetY = 10000;
@@ -1356,14 +1548,11 @@ function renderConnections() {
       drawn.add(key);
       const a = state.people[aId];
       const b = state.people[bId];
-      if (!a || !b) continue;
+      if (!a || !b || !visible.has(aId) || !visible.has(bId)) continue;
       const x1 = offsetX + Math.min(a.x, b.x) + CARD_WIDTH;
       const x2 = offsetX + Math.max(a.x, b.x);
-      const y = offsetY + a.y + CARD_HEIGHT / 2;
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', `M ${x1} ${y} L ${x2} ${y}`);
-      path.setAttribute('class', 'partner');
-      svg.appendChild(path);
+      const y = offsetY + ((a.y + b.y) / 2) + CARD_HEIGHT / 2;
+      svg.appendChild(createConnectionPath([[x1, y], [x2, y]], 'partner'));
     }
   }
 
@@ -1371,15 +1560,19 @@ function renderConnections() {
   // For each child, draw from parent midpoint down to child top
   for (const [childId, parents] of Object.entries(state.relations.parents)) {
     const child = state.people[childId];
-    if (!child) continue;
-    const parentObjs = parents.map(p => state.people[p]).filter(Boolean);
+    if (!child || !visible.has(childId)) continue;
+    const parentObjs = parents
+      .map(normalizeParentEntry)
+      .filter(Boolean)
+      .map(parent => state.people[parent.id])
+      .filter(parent => parent && visible.has(parent.id));
     if (!parentObjs.length) continue;
 
     let parentMidX, parentY;
     if (parentObjs.length === 2) {
       const [p1, p2] = parentObjs;
       parentMidX = ((p1.x + p2.x) / 2) + CARD_WIDTH / 2;
-      parentY = p1.y + CARD_HEIGHT / 2;
+      parentY = ((p1.y + p2.y) / 2) + CARD_HEIGHT / 2;
     } else {
       parentMidX = parentObjs[0].x + CARD_WIDTH / 2;
       parentY = parentObjs[0].y + CARD_HEIGHT;
@@ -1394,10 +1587,15 @@ function renderConnections() {
     const ey = offsetY + childTopY;
     const midY = (sy + ey) / 2;
 
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', `M ${sx} ${sy} L ${sx} ${midY} L ${ex} ${midY} L ${ex} ${ey}`);
-    svg.appendChild(path);
+    svg.appendChild(createConnectionPath([[sx, sy], [sx, midY], [ex, midY], [ex, ey]]));
   }
+}
+
+function createConnectionPath(points, className = '') {
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', points.map((point, index) => `${index ? 'L' : 'M'} ${point[0]} ${point[1]}`).join(' '));
+  if (className) path.setAttribute('class', className);
+  return path;
 }
 
 function applyTransform() {
@@ -1460,7 +1658,7 @@ $('zoomOut').onclick = () => {
 $('zoomReset').onclick = () => fitToScreen();
 
 function fitToScreen() {
-  const ids = Object.keys(state.people);
+  const ids = [...visibleIds()];
   if (!ids.length) {
     state.view = { x: wrap.clientWidth / 2, y: wrap.clientHeight / 2, scale: 1 };
     applyTransform();
@@ -1478,6 +1676,11 @@ function fitToScreen() {
   state.view.scale = scale;
   state.view.x = wrap.clientWidth / 2 - ((minX + maxX) / 2) * scale;
   state.view.y = wrap.clientHeight / 2 - ((minY + maxY) / 2) * scale;
+  if (state.visibleFilter) {
+    state.view.scale = 1;
+    state.view.x = 40 - minX;
+    state.view.y = 40 - minY;
+  }
   applyTransform();
 }
 
@@ -1514,13 +1717,19 @@ function selectPerson(id) {
   updatePhotoPreview(p.photo);
 
   // Relations
-  renderRelationsList('parentsList', getParents(id), id, 'parent');
+  renderRelationsList('parentsList', getParentRelationItems(id), id, 'parent');
   renderRelationsList('partnersList', getPartners(id), id, 'partner');
   renderRelationsList('childrenList', getChildren(id), id, 'child');
   renderRelationsList('siblingsList', getSiblings(id), id, 'sibling');
 
   panel.classList.add('open');
   render();
+}
+
+function getParentRelationItems(id) {
+  return parentEntries(id)
+    .map(parent => ({ person: state.people[parent.id], role: parent.role }))
+    .filter(item => item.person);
 }
 
 function updatePhotoPreview(photoUrl) {
@@ -1540,7 +1749,9 @@ function updatePhotoPreview(photoUrl) {
 function renderRelationsList(containerId, list, sourceId, relType) {
   const c = $(containerId);
   c.innerHTML = '';
-  for (const rel of list) {
+  for (const item of list) {
+    const rel = item.person || item;
+    const role = item.role;
     const chip = document.createElement('div');
     chip.className = 'relation-chip';
     const relName = displayName(rel);
@@ -1549,7 +1760,7 @@ function renderRelationsList(containerId, list, sourceId, relType) {
       <div class="relation-chip-photo">${photoHtml}</div>
       <div class="relation-chip-info">
         <div class="relation-chip-name">${escapeHtml(relName)}</div>
-        <div class="relation-chip-rel">${formatDates(rel) || '—'}</div>
+        <div class="relation-chip-rel">${role ? `<span class="relation-chip-badge">${relationRoleLabel(role)}</span>` : ''}${formatDates(rel) || '—'}</div>
       </div>
       <button class="relation-chip-remove" title="Quitar relación">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1571,8 +1782,8 @@ function removeRelation(sourceId, otherId, relType) {
   else if (relType === 'partner') removePartnership(sourceId, otherId);
   else if (relType === 'sibling') {
     // Remove shared parent - just disconnect: simplest is to make them no longer share parents
-    const myParents = state.relations.parents[sourceId] || [];
-    const theirParents = state.relations.parents[otherId] || [];
+    const myParents = parentEntries(sourceId).map(parent => parent.id);
+    const theirParents = parentEntries(otherId).map(parent => parent.id);
     const shared = myParents.filter(p => theirParents.includes(p));
     for (const sp of shared) removeParentChild(sp, otherId);
   }
@@ -1655,6 +1866,11 @@ $('saveBtn').onclick = () => {
   toast('Cambios guardados');
 };
 
+$('viewOptionsBtn').onclick = () => {
+  if (!currentEditingId) return;
+  showViewOptions(currentEditingId);
+};
+
 $('deleteBtn').onclick = () => {
   if (!currentEditingId) return;
   const p = state.people[currentEditingId];
@@ -1681,10 +1897,17 @@ $$('.add-relation-btn').forEach(btn => {
    ADD RELATION FLOW
    =========================================================== */
 function handleAddRelation(sourceId, relType) {
+  if (relType === 'parent') {
+    showParentRolePicker(sourceId);
+    return;
+  }
   // Show modal: option to create new person or pick existing
   const sourceName = displayName(state.people[sourceId]);
   const relLabels = {
-    parent: 'padre/madre',
+    father: 'padre',
+    mother: 'madre',
+    untypedParent: 'progenitor',
+    parent: 'progenitor',
     child: 'hijo/a',
     partner: 'pareja',
     sibling: 'hermano/a',
@@ -1718,6 +1941,15 @@ function handleAddRelation(sourceId, relType) {
         <input type="text" id="newPersonDeath" placeholder="aaaa (opcional)">
       </div>
     </div>
+    <div class="field" id="newPersonGenderField">
+      <label>Sexo</label>
+      <select id="newPersonGender">
+        <option value="">Sin especificar</option>
+        <option value="F">Femenino</option>
+        <option value="M">Masculino</option>
+        <option value="O">Otro</option>
+      </select>
+    </div>
     <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); text-align: center;">
       <button class="btn" id="pickExistingBtn" style="font-size: 12px;">…o vincular con persona existente</button>
     </div>
@@ -1728,6 +1960,7 @@ function handleAddRelation(sourceId, relType) {
   `);
 
   $('newPersonFirstName').focus();
+  $('newPersonGender').value = genderForRelType(relType);
 
   $('modalCancel').onclick = closeModal;
   $('modalCreate').onclick = () => {
@@ -1738,18 +1971,22 @@ function handleAddRelation(sourceId, relType) {
     if (!fullName) { $('newPersonFirstName').focus(); return; }
     const birthYear = $('newPersonBirth').value.trim();
     const deathYear = $('newPersonDeath').value.trim();
+    const gender = $('newPersonGender').value;
     const newP = newPerson({
       name: fullName,
       firstName,
       lastName1,
       lastName2,
+      gender,
       birthDate: birthYear,
       deceased: !!deathYear,
       deathDate: deathYear,
     });
     const linked = linkRelation(sourceId, newP.id, relType);
     if (linked === false) {
-      delete state.people[newP.id];
+      deletePerson(newP.id);
+      state.layoutDirty = true;
+      render();
       return;
     }
     closeModal();
@@ -1766,8 +2003,31 @@ function handleAddRelation(sourceId, relType) {
   });
 }
 
+function showParentRolePicker(sourceId) {
+  const sourceName = displayName(state.people[sourceId]);
+  showModal(`
+    <div class="modal-title">Añadir progenitor</div>
+    <div class="modal-subtitle">Para <strong>${escapeHtml(sourceName)}</strong>. Puedes diferenciar padre y madre, o dejarlo sin especificar.</div>
+    <div class="modal-actions" style="justify-content: stretch; flex-direction: column;">
+      <button class="btn btn-primary" id="addFather">Añadir padre</button>
+      <button class="btn btn-primary" id="addMother">Añadir madre</button>
+      <button class="btn" id="addParent">Añadir progenitor sin especificar</button>
+      <button class="btn" id="modalCancel">Cancelar</button>
+    </div>
+  `);
+  $('addFather').onclick = () => handleAddRelation(sourceId, 'father');
+  $('addMother').onclick = () => handleAddRelation(sourceId, 'mother');
+  $('addParent').onclick = () => handleAddRelation(sourceId, 'untypedParent');
+  $('modalCancel').onclick = closeModal;
+}
+
 function showPersonPicker(sourceId, relType) {
   const others = Object.values(state.people).filter(p => p.id !== sourceId);
+  const hint = isParentRelType(relType)
+    ? 'Padre y madre son roles separados. Se permite un máximo de 2 progenitores por persona.'
+    : relType === 'partner'
+      ? 'Puedes añadir varias parejas a la misma persona.'
+      : 'Los hermanos se autovinculan compartiendo los progenitores de la persona actual.';
   const items = others.map(p => `
     <div class="person-picker-item" data-id="${p.id}">
       <div class="relation-chip-photo">${p.photo ? `<img src="${p.photo}">` : `<span>${getInitials(displayName(p))}</span>`}</div>
@@ -1779,7 +2039,8 @@ function showPersonPicker(sourceId, relType) {
   `).join('');
   showModal(`
     <div class="modal-title">Vincular persona existente</div>
-    <div class="modal-subtitle">Selecciona quién es ${relType === 'parent' ? 'el padre/madre' : relType === 'child' ? 'el hijo/a' : relType === 'partner' ? 'la pareja' : 'el hermano/a'}</div>
+    <div class="modal-subtitle">Selecciona quién es ${relType === 'father' ? 'el padre' : relType === 'mother' ? 'la madre' : isParentRelType(relType) ? 'el progenitor' : relType === 'child' ? 'el hijo/a' : relType === 'partner' ? 'la pareja' : 'el hermano/a'}</div>
+    <div class="person-picker-hint">${hint}</div>
     <div class="person-picker-list">${items || '<div style="padding: 20px; text-align: center; color: var(--ink-muted);">No hay otras personas en el árbol todavía.</div>'}</div>
     <div class="modal-actions">
       <button class="btn" id="modalCancel">Cancelar</button>
@@ -1800,13 +2061,17 @@ function showPersonPicker(sourceId, relType) {
 }
 
 function linkRelation(sourceId, otherId, relType) {
-  if (relType === 'parent') addParentChild(otherId, sourceId);
-  else if (relType === 'child') addParentChild(sourceId, otherId);
-  else if (relType === 'partner') addPartnership(sourceId, otherId);
+  if (isParentRelType(relType)) return addParentChild(otherId, sourceId, relType);
+  else if (relType === 'child') return addParentChild(sourceId, otherId, inferRoleFromGender(state.people[sourceId]));
+  else if (relType === 'partner') return addPartnership(sourceId, otherId);
   else if (relType === 'sibling') {
-    const parents = state.relations.parents[sourceId] || [];
+    const parents = parentEntries(sourceId);
     if (parents.length) {
-      for (const pp of parents) addParentChild(pp, otherId);
+      let linked = false;
+      for (const pp of parents) {
+        if (addParentChild(pp.id, otherId, pp.role)) linked = true;
+      }
+      return linked;
     } else {
       toast('Para añadir un hermano, primero añade padre o madre a la persona actual');
       return false;
@@ -1857,19 +2122,19 @@ function showWelcomeModal(force = false) {
     <div class="guide-grid">
       <div class="guide-card">
         <strong>1. Empieza por una persona</strong>
-        <p>Pulsa <em>Añadir persona</em> y crea la primera ficha del arbol. Despues, ese boton ya no crea otra raiz aparte.</p>
+        <p>Pulsa <em>Añadir persona</em> para crear fichas. Pueden quedar sueltas y vincularse despues desde cualquier tarjeta.</p>
       </div>
       <div class="guide-card">
         <strong>2. Haz crecer relaciones</strong>
-        <p>Usa los botones alrededor de la tarjeta: arriba padres, abajo hijos, izquierda hermanos y derecha parejas.</p>
+        <p>Usa los botones alrededor de la tarjeta: arriba progenitores, abajo hijos, izquierda hermanos y derecha parejas. En el panel puedes elegir padre o madre.</p>
       </div>
       <div class="guide-card">
         <strong>3. Completa la historia</strong>
         <p>Selecciona cualquier persona para editar fechas, lugares, notas, ocupacion y foto desde el panel lateral.</p>
       </div>
       <div class="guide-card">
-        <strong>4. Guarda copias ordenadas</strong>
-        <p>Exporta en JSON para conservar fotos y en Excel para trabajar en tabla. Ambos salen con fecha y hora en el nombre.</p>
+        <strong>4. Guarda, mira e imprime</strong>
+        <p>Exporta JSON para conservar fotos, usa doble clic para alternar rama directa/arbol completo e imprime todo, rama o epoca.</p>
       </div>
     </div>
     <div class="guide-tip">Consejo: si quieres volver a ver esta ayuda, pulsa <strong>Guía</strong> en la barra superior.</div>
@@ -1888,17 +2153,51 @@ function showWelcomeModal(force = false) {
   };
 }
 
+function showViewOptions(sourceId) {
+  const sourceName = displayName(state.people[sourceId]);
+  showModal(`
+    <div class="modal-title">Ver ramas</div>
+    <div class="modal-subtitle">Elige cómo quieres ver el árbol tomando como referencia a <strong>${escapeHtml(sourceName)}</strong>. También puedes abrir este selector con doble clic sobre una tarjeta.</div>
+    <div class="modal-actions" style="justify-content: stretch; flex-direction: column;">
+      <button class="btn btn-primary" id="viewDirect">Ver rama directa</button>
+      <button class="btn" id="viewAll">Ver árbol completo</button>
+      <button class="btn" id="modalCancel">Cancelar</button>
+    </div>
+  `);
+  $('viewDirect').onclick = () => {
+    state.viewMode = 'direct';
+    state.focusId = sourceId;
+    closeModal();
+    state.layoutDirty = true;
+    render();
+    fitToScreen();
+    toast('Mostrando rama directa');
+  };
+  $('viewAll').onclick = () => {
+    state.viewMode = 'all';
+    state.focusId = null;
+    closeModal();
+    state.layoutDirty = true;
+    render();
+    fitToScreen();
+    toast('Mostrando árbol completo');
+  };
+  $('modalCancel').onclick = closeModal;
+}
+
+wrap.addEventListener('dblclick', e => {
+  const card = e.target.closest('.person');
+  if (!card) return;
+  showViewOptions(card.dataset.id);
+});
+
 /* ===========================================================
    ADD PERSON BUTTON (top bar)
    =========================================================== */
 function createFirstPerson() {
-  if (Object.keys(state.people).length) {
-    toast('El árbol ya empezó. Añade el resto desde las tarjetas existentes.');
-    return;
-  }
   showModal(`
     <div class="modal-title">Nueva persona</div>
-    <div class="modal-subtitle">El árbol siempre empieza por una persona. Después el resto sale desde esa primera ficha.</div>
+    <div class="modal-subtitle">Crea una persona suelta. Podrás vincularla después desde cualquier tarjeta o desde su panel.</div>
     <div class="field-row field-row-3">
       <div class="field">
         <label>Nombre/s</label>
@@ -1923,6 +2222,15 @@ function createFirstPerson() {
         <input type="text" id="newPersonDeath" placeholder="aaaa (opcional)">
       </div>
     </div>
+    <div class="field">
+      <label>Sexo</label>
+      <select id="newPersonGender">
+        <option value="">Sin especificar</option>
+        <option value="F">Femenino</option>
+        <option value="M">Masculino</option>
+        <option value="O">Otro</option>
+      </select>
+    </div>
     <div class="modal-actions">
       <button class="btn" id="modalCancel">Cancelar</button>
       <button class="btn btn-primary" id="modalCreate">Crear</button>
@@ -1941,11 +2249,13 @@ function createFirstPerson() {
     }
     const birthYear = $('newPersonBirth').value.trim();
     const deathYear = $('newPersonDeath').value.trim();
+    const gender = $('newPersonGender').value;
     const p = newPerson({
       name: fullName,
       firstName,
       lastName1,
       lastName2,
+      gender,
       birthDate: birthYear,
       deceased: !!deathYear, deathDate: deathYear
     });
@@ -2048,8 +2358,9 @@ $$('#exportMenu .menu-item').forEach(item => {
 });
 
 function exportJSON() {
+  state.relations = normalizeRelations(state.relations, state.people);
   const data = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     people: state.people,
     relations: state.relations,
@@ -2080,14 +2391,14 @@ function exportExcel() {
   XLSX.utils.book_append_sheet(wb, wsPeople, 'Personas');
 
   // Sheet 2: Parent-child
-  const parentRows = [['ID Hijo', 'Nombre Hijo', 'ID Padre/Madre', 'Nombre Padre/Madre']];
+  const parentRows = [['ID Hijo', 'Nombre Hijo', 'ID Padre/Madre', 'Nombre Padre/Madre', 'Rol']];
   for (const [cid, parents] of Object.entries(state.relations.parents)) {
-    for (const pid of parents) {
-      parentRows.push([cid, displayName(state.people[cid]), pid, displayName(state.people[pid])]);
+    for (const parent of parents.map(normalizeParentEntry).filter(Boolean)) {
+      parentRows.push([cid, displayName(state.people[cid]), parent.id, displayName(state.people[parent.id]), relationRoleLabel(parent.role)]);
     }
   }
   const wsParents = XLSX.utils.aoa_to_sheet(parentRows);
-  wsParents['!cols'] = [{ wch: 10 }, { wch: 25 }, { wch: 15 }, { wch: 25 }];
+  wsParents['!cols'] = [{ wch: 10 }, { wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, wsParents, 'Padres-Hijos');
 
   // Sheet 3: Partners
@@ -2159,13 +2470,15 @@ function importJSON(file) {
     try {
       const data = JSON.parse(reader.result);
       if (!data.people) throw new Error('Archivo inválido');
-      // Merge or replace? Replace.
-      state.people = data.people || {};
+      state.people = normalizePeopleMap(data.people || {});
       Object.values(state.people).forEach(normalizePerson);
-      state.relations = data.relations || { parents: {}, partners: {} };
-      state.nextId = data.nextId || (Object.keys(state.people).length + 1);
+      state.relations = normalizeRelations(data.relations || { parents: {}, partners: {} }, state.people);
+      state.nextId = nextIdFromPeople(state.people, data.nextId);
       state.layoutDirty = true;
       state.selectedId = null;
+      state.viewMode = 'all';
+      state.focusId = null;
+      state.visibleFilter = null;
       panel.classList.remove('open');
       render();
       fitToScreen();
@@ -2176,6 +2489,35 @@ function importJSON(file) {
     }
   };
   reader.readAsText(file);
+}
+
+function normalizePeopleMap(rawPeople) {
+  const people = {};
+  if (Array.isArray(rawPeople)) {
+    rawPeople.forEach((person, index) => {
+      const id = String(person.id || ('p' + (index + 1)));
+      people[id] = { ...person, id };
+    });
+  } else {
+    for (const [key, person] of Object.entries(rawPeople || {})) {
+      const id = String(person?.id || key);
+      people[id] = { ...person, id };
+    }
+  }
+  Object.values(people).forEach(person => {
+    person.x = Number.isFinite(Number(person.x)) ? Number(person.x) : 0;
+    person.y = Number.isFinite(Number(person.y)) ? Number(person.y) : 0;
+    normalizePerson(person);
+  });
+  return people;
+}
+
+function nextIdFromPeople(people, importedNextId) {
+  const maxId = Object.keys(people).reduce((max, id) => {
+    const num = parseInt(String(id).replace(/\D/g, ''), 10);
+    return Number.isFinite(num) ? Math.max(max, num) : max;
+  }, 0);
+  return Math.max(Number(importedNextId) || 1, maxId + 1, 1);
 }
 
 function importExcel(file) {
@@ -2214,9 +2556,6 @@ function importExcel(file) {
           const row = rows[i];
           if (!row || !row.length) continue;
           const id = String(row[cols.id] || ('p' + i));
-          // Keep up to date nextId
-          const num = parseInt(id.replace(/\D/g, ''), 10);
-          if (!isNaN(num) && num >= state.nextId) state.nextId = num + 1;
           people[id] = {
             id,
             name: String((cols.fullName !== -1 ? row[cols.fullName] : '') || (cols.firstName !== -1 ? row[cols.firstName] : '') || 'Sin nombre'),
@@ -2243,15 +2582,19 @@ function importExcel(file) {
       const parentSheet = wb.Sheets['Padres-Hijos'];
       if (parentSheet) {
         const rows = XLSX.utils.sheet_to_json(parentSheet, { header: 1 });
+        const headers = rows[0] || [];
+        const roleCol = headers.findIndex(h => String(h).toLowerCase().includes('rol'));
         for (let i = 1; i < rows.length; i++) {
           const r = rows[i];
           if (!r || r.length < 3) continue;
           const childId = String(r[0]);
           const parentId = String(r[2]);
+          const roleValue = roleCol !== -1 ? String(r[roleCol] || '').toLowerCase() : '';
+          const role = roleValue === 'padre' ? 'father' : roleValue === 'madre' ? 'mother' : inferRoleFromGender(people[parentId]);
           if (people[childId] && people[parentId]) {
             if (!relations.parents[childId]) relations.parents[childId] = [];
-            if (!relations.parents[childId].includes(parentId) && relations.parents[childId].length < 2) {
-              relations.parents[childId].push(parentId);
+            if (!relations.parents[childId].some(parent => parent.id === parentId) && relations.parents[childId].length < 2) {
+              relations.parents[childId].push({ id: parentId, role });
             }
           }
         }
@@ -2276,9 +2619,13 @@ function importExcel(file) {
       }
 
       state.people = people;
-      state.relations = relations;
+      state.relations = normalizeRelations(relations, state.people);
+      state.nextId = nextIdFromPeople(state.people, state.nextId);
       state.layoutDirty = true;
       state.selectedId = null;
+      state.viewMode = 'all';
+      state.focusId = null;
+      state.visibleFilter = null;
       panel.classList.remove('open');
       render();
       fitToScreen();
@@ -2299,8 +2646,11 @@ $$('#printMenu .menu-item').forEach(item => {
     const mode = item.dataset.print;
     $('printMenu').classList.remove('open');
     if (mode === 'all') {
-      window.print();
+      printAll();
     } else if (mode === 'selected') {
+      if (!state.selectedId) { toast('Selecciona una persona primero'); return; }
+      printDirectBranch(state.selectedId);
+    } else if (mode === 'descendants') {
       if (!state.selectedId) { toast('Selecciona una persona primero'); return; }
       printDescendants(state.selectedId);
     } else if (mode === 'filter') {
@@ -2308,6 +2658,14 @@ $$('#printMenu .menu-item').forEach(item => {
     }
   };
 });
+
+function printDirectBranch(rootId) {
+  printWithFilter(getDirectBranchIds(rootId));
+}
+
+function printAll() {
+  printWithFilter(new Set(Object.keys(state.people)));
+}
 
 function printDescendants(rootId) {
   // Hide all people not in descendant tree, then print, then restore
@@ -2355,6 +2713,46 @@ function promptYearFilter() {
 }
 
 function printWithFilter(keepSet) {
+  const previousView = state.viewMode;
+  const previousFocus = state.focusId;
+  const previousTransform = { ...state.view };
+  const inner = $('canvasInner');
+  const previousSize = { width: inner.style.width, height: inner.style.height };
+  state.visibleFilter = keepSet;
+  state.layoutDirty = true;
+  render();
+  fitToScreen();
+  preparePrintCanvas(keepSet);
+  const hidden = hideOutsidePrintSet(keepSet);
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      hidden.forEach(c => c.style.display = '');
+      inner.style.width = previousSize.width;
+      inner.style.height = previousSize.height;
+      state.visibleFilter = null;
+      state.viewMode = previousView;
+      state.focusId = previousFocus;
+      state.view = previousTransform;
+      state.layoutDirty = true;
+      render();
+    }, 500);
+  }, 100);
+}
+
+function preparePrintCanvas(keepSet) {
+  const ids = [...keepSet].filter(id => state.people[id]);
+  if (!ids.length) return;
+  const minX = Math.min(...ids.map(id => state.people[id].x));
+  const minY = Math.min(...ids.map(id => state.people[id].y));
+  const maxX = Math.max(...ids.map(id => state.people[id].x + CARD_WIDTH));
+  const maxY = Math.max(...ids.map(id => state.people[id].y + CARD_HEIGHT));
+  const inner = $('canvasInner');
+  inner.style.width = (maxX - minX + 80) + 'px';
+  inner.style.height = (maxY - minY + 80) + 'px';
+}
+
+function hideOutsidePrintSet(keepSet) {
   const cards = document.querySelectorAll('.person');
   const hidden = [];
   cards.forEach(c => {
@@ -2363,11 +2761,7 @@ function printWithFilter(keepSet) {
       c.style.display = 'none';
     }
   });
-  // Trigger print
-  setTimeout(() => {
-    window.print();
-    setTimeout(() => hidden.forEach(c => c.style.display = ''), 500);
-  }, 100);
+  return hidden;
 }
 
 /* ===========================================================

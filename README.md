@@ -25,8 +25,10 @@ Resumen rapido:
 1. Pulsa `Añadir persona`.
 2. Selecciona una tarjeta para editar su ficha lateral.
 3. Usa los botones alrededor de la tarjeta para anadir relaciones.
-4. Exporta en `JSON` si quieres conservar tambien las fotos.
-5. Exporta en `Excel` si quieres una tabla comoda para revisar o compartir.
+4. Diferencia `padre`, `madre`, parejas multiples y hermanos compartiendo progenitores.
+5. Usa `Ver ramas` o doble clic en una tarjeta para alternar rama directa y arbol completo.
+6. Exporta en `JSON` si quieres conservar tambien las fotos.
+7. Exporta en `Excel` si quieres una tabla comoda para revisar o compartir.
 
 ## Truco Muy Importante
 
