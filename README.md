@@ -40,6 +40,19 @@ arbol-genealogico-2026-05-09_18-42-07.json
 
 Eso permite ordenar copias por version sin tener que llamar a los archivos `final`, `final-bueno`, `final-bueno-ahora-si`, `final-bueno-ahora-si-2`.
 
+## Changelog (refactor de relaciones y layout)
+
+- Se refactorizo el motor de parentesco con esquema canonico por persona: `father`, `mother`, `untypedParents`, `partners` y `manualPosition`.
+- Hermanos y hijos ahora son siempre derivados; ya no se almacenan aristas de hermandad sueltas.
+- Se añadieron reglas fuertes de integridad: sin duplicar padre/madre, sin autociclos y con simetria obligatoria en parejas.
+- El cargador JSON/Excel ahora migra formatos antiguos y sanea inconsistencias (IDs colgantes, asimetrias, ciclos y campos legacy).
+- El layout fue reescrito para agrupar por generaciones y unidades familiares, con mejor adyacencia de hermanos/parejas y menos cruces.
+- Las conexiones de parentesco ahora se dibujan de forma ortogonal con rail familiar, en vez de diagonales directas.
+- Se añadieron posiciones manuales persistentes al arrastrar tarjetas y boton **Reorganizar** para recalculo completo.
+- En el panel lateral se mejoro la UX de relaciones: bloqueo de alta directa de padre/madre cuando ya existe rol, conversion de rol de progenitor, badges de hermano completo/medio y filtro de hijos en comun por pareja.
+- Se incorporo undo/redo con `Ctrl+Z` y `Ctrl+Y` para mutaciones del arbol.
+- Se añadio modo debug (`?debug=1`) con bateria de tests del modelo y del layout, mas carga de datos de ejemplo.
+
 ## Tecnologia
 
 - HTML, CSS y JavaScript vanilla.
