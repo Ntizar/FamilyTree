@@ -1283,6 +1283,409 @@ function computeLayout() {
 }
 
 /* ===========================================================
+   MADRID BACKGROUND — Pixel Art de Madrid real
+   Inspirado en Madrid3Pixel — landmarks, río, parques, edificios
+   =========================================================== */
+const MADRID_BG = (() => {
+  const PIXEL = 4; // tamaño de píxel base
+  const SCALE = 1.5; // escala del fondo
+
+  // Paleta pixel art Madrid
+  const PAL = {
+    ground:    '#e8e0d0',
+    groundDark:'#d8d0c0',
+    building:  '#c8b898',
+    buildingTop:'#d8c8a8',
+    buildingSide:'#b0a080',
+    window:    '#4a8abf',
+    windowLit: '#ffdd44',
+    park:      '#3a8a35',
+    parkDark:  '#2a6a25',
+    water:     '#3a7ab5',
+    waterShine:'#5aaad5',
+    road:      '#a0a0a0',
+    sidewalk:  '#c0c0b0',
+    bridge:    '#b8a080',
+    roof:      '#c05030',
+    night:     '#1a1a3a',
+  };
+
+  // Landmarks de Madrid real (coordenadas relativas al grid)
+  const LANDMARKS = [
+    { x: 0, y: 0, w: 3, h: 3, type: 'sol', label: 'Puerta del Sol' },
+    { x: 3, y: -2, w: 1, h: 5, type: 'granvia', label: 'Gran Vía' },
+    { x: 5, y: 2, w: 4, h: 3, type: 'retiro', label: 'Parque del Retiro' },
+    { x: -5, y: 4, w: 3, h: 2, type: 'atoha', label: 'Atocha' },
+    { x: -6, y: -3, w: 4, h: 3, type: 'cibeles', label: 'Cibeles' },
+    { x: 2, y: -5, w: 2, h: 2, type: 'chamberi', label: 'Chamberí' },
+    { x: -3, y: -5, w: 3, h: 2, type: 'chamartin', label: 'Chamartín' },
+    { x: 6, y: -4, w: 2, h: 2, type: 'salamanca', label: 'Salamanca' },
+    { x: -7, y: 0, w: 3, h: 2, type: 'casacampo', label: 'Casa de Campo' },
+    { x: -2, y: 5, w: 2, h: 2, type: 'vicálvaro', label: 'Vicálvaro' },
+    { x: 4, y: 5, w: 2, h: 2, type: 'barajas', label: 'Barajas' },
+    { x: 0, y: -4, w: 2, h: 2, type: 'catedral', label: 'Almudena' },
+    { x: 1, y: 1, w: 2, h: 2, type: 'debod', label: 'Templo de Debod' },
+    { x: -1, y: -2, w: 2, h: 1, type: 'plazamayor', label: 'Plaza Mayor' },
+    { x: 3, y: 0, w: 2, h: 2, type: 'reina', label: 'Reina Sofía' },
+  ];
+
+  // Río Manzanares — curva real por Madrid
+  const MANZANARES = [
+    {x:-8, y:-6}, {x:-6, y:-5}, {x:-4, y:-4}, {x:-2, y:-3},
+    {x:0, y:-2}, {x:2, y:-1}, {x:4, y:0}, {x:6, y:1}, {x:8, y:2},
+    {x:10, y:3},
+  ];
+
+  // Calles principales — M-30 aproximada
+  const CALLES = [
+    // Gran Vía (vertical)
+    [{x:3, y:-7}, {x:3, y:-4}, {x:3, y:0}, {x:3, y:4}, {x:3, y:7}],
+    // Castellana (diagonal)
+    [{x:-2, y:-7}, {x:0, y:-5}, {x:1, y:-3}, {x:2, y:-1}, {x:3, y:1}, {x:4, y:3}, {x:5, y:5}],
+    // Paseo del Prado
+    [{x:0, y:2}, {x:2, y:2}, {x:4, y:2}, {x:6, y:2}, {x:8, y:2}],
+    // Paseo de la Castellana norte
+    [{x:1, y:-7}, {x:2, y:-5}, {x:3, y:-3}, {x:4, y:-1}],
+  ];
+
+  // Metro lines simplificadas
+  const METRO = [
+    { color: '#3da5e8', points: [[-6,0],[-3,0],[0,0],[3,0],[6,0],[8,0]] },
+    { color: '#ed1c24', points: [[-4,-4],[-2,-2],[0,0],[2,2],[4,4]] },
+    { color: '#ffc72c', points: [[0,-6],[0,-3],[0,0],[0,3],[0,6]] },
+    { color: '#9b59b6', points: [[-5,2],[-3,1],[0,0],[3,-1],[5,-2]] },
+    { color: '#93c761', points: [[-3,-4],[-1,-2],[1,0],[3,2],[5,4]] },
+    { color: '#b0b0b0', points: [[-4,-4],[-6,0],[-4,4],[0,5],[4,4],[6,0],[4,-4],[0,-5]] },
+  ];
+
+  let canvas, ctx;
+  let bgDirty = true;
+  let bgCanvas = null;
+  let bgCtx = null;
+
+  function init() {
+    canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.35;';
+    canvas.id = 'madrid-bg-canvas';
+    document.body.appendChild(canvas);
+    ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    generateBackground();
+  }
+
+  function resize() {
+    if (!canvas) return;
+    const wrap = document.getElementById('canvasWrap');
+    if (!wrap) return;
+    canvas.width = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+    bgDirty = true;
+  }
+
+  function generateBackground() {
+    if (!canvas) return;
+    const w = canvas.width, h = canvas.height;
+    const p = PIXEL * SCALE;
+
+    // Dibujar en canvas temporal
+    if (!bgCanvas) {
+      bgCanvas = document.createElement('canvas');
+      bgCtx = bgCanvas.getContext('2d');
+    }
+    bgCanvas.width = w;
+    bgCanvas.height = h;
+
+    // Fondo base — color arena Madrid
+    bgCtx.fillStyle = PAL.ground;
+    bgCtx.fillRect(0, 0, w, h);
+
+    // Grid sutil de manzanas
+    bgCtx.strokeStyle = PAL.groundDark;
+    bgCtx.lineWidth = 0.5;
+    for (let gx = 0; gx < w; gx += p * 4) {
+      bgCtx.beginPath(); bgCtx.moveTo(gx, 0); bgCtx.lineTo(gx, h); bgCtx.stroke();
+    }
+    for (let gy = 0; gy < h; gy += p * 4) {
+      bgCtx.beginPath(); bgCtx.moveTo(0, gy); bgCtx.lineTo(w, gy); bgCtx.stroke();
+    }
+
+    // Dibujar calles principales
+    drawCalles(bgCtx, w, h, p);
+
+    // Dibujar río Manzanares
+    drawRiver(bgCtx, w, h, p);
+
+    // Dibujar parques
+    drawParks(bgCtx, w, h, p);
+
+    // Dibujar edificios
+    drawBuildings(bgCtx, w, h, p);
+
+    // Dibujar landmarks
+    drawLandmarks(bgCtx, w, h, p);
+
+    // Dibujar metro
+    drawMetro(bgCtx, w, h, p);
+
+    bgDirty = false;
+  }
+
+  function drawCalles(c, w, h, p) {
+    const cx = w / 2, cy = h / 2;
+    const scale = Math.min(w, h) / 24;
+
+    for (const calle of CALLES) {
+      c.strokeStyle = PAL.road;
+      c.lineWidth = p * 1.5;
+      c.lineCap = 'round';
+      c.lineJoin = 'round';
+      c.beginPath();
+      for (let i = 0; i < calle.length; i++) {
+        const px = cx + calle[i].x * scale;
+        const py = cy + calle[i].y * scale;
+        if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+      }
+      c.stroke();
+
+      // Sidewalk
+      c.strokeStyle = PAL.sidewalk;
+      c.lineWidth = p * 2;
+      c.globalAlpha = 0.3;
+      c.beginPath();
+      for (let i = 0; i < calle.length; i++) {
+        const px = cx + calle[i].x * scale;
+        const py = cy + calle[i].y * scale;
+        if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+      }
+      c.stroke();
+      c.globalAlpha = 1;
+    }
+  }
+
+  function drawRiver(c, w, h, p) {
+    const cx = w / 2, cy = h / 2;
+    const scale = Math.min(w, h) / 24;
+
+    // Río Manzanares
+    c.strokeStyle = PAL.water;
+    c.lineWidth = p * 3;
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    c.beginPath();
+    for (let i = 0; i < MANZANARES.length; i++) {
+      const px = cx + MANZANARES[i].x * scale;
+      const py = cy + MANZANARES[i].y * scale;
+      if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+    }
+    c.stroke();
+
+    // Brillo agua
+    c.strokeStyle = PAL.waterShine;
+    c.lineWidth = p;
+    c.globalAlpha = 0.4;
+    c.beginPath();
+    for (let i = 0; i < MANZANARES.length; i++) {
+      const px = cx + MANZANARES[i].x * scale;
+      const py = cy + MANZANARES[i].y * scale + p;
+      if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+    }
+    c.stroke();
+    c.globalAlpha = 1;
+
+    // Puentes
+    for (let i = 0; i < MANZANARES.length; i += 3) {
+      const px = cx + MANZANARES[i].x * scale;
+      const py = cy + MANZANARES[i].y * scale;
+      c.fillStyle = PAL.bridge;
+      c.fillRect(px - p, py - p * 0.5, p * 2, p);
+    }
+  }
+
+  function drawParks(c, w, h, p) {
+    const cx = w / 2, cy = h / 2;
+    const scale = Math.min(w, h) / 24;
+
+    // Retiro
+    drawParkArea(c, cx, cy, scale, 5, 2, 4, 3, '#3a8a35', 'Retiro');
+    // Casa de Campo
+    drawParkArea(c, cx, cy, scale, -7, 0, 3, 2, '#2a7a25', 'Casa de Campo');
+    // Jardines Atocha
+    drawParkArea(c, cx, cy, scale, -5, 4, 2, 2, '#3a8a35', 'Atocha');
+    // Buen Retiro
+    drawParkArea(c, cx, cy, scale, 0, -2, 2, 1, '#3a8a35', '');
+  }
+
+  function drawParkArea(c, cx, cy, scale, ox, oy, w, h, color, label) {
+    const px = cx + ox * scale;
+    const py = cy + oy * scale;
+    const pw = w * scale;
+    const ph = h * scale;
+
+    c.fillStyle = color;
+    c.fillRect(px - pw/2, py - ph/2, pw, ph);
+
+    // Árboles pixel art
+    const treeSize = p * 2;
+    for (let tx = px - pw/2 + treeSize; tx < px + pw/2 - treeSize; tx += treeSize * 2.5) {
+      for (let ty = py - ph/2 + treeSize; ty < py + ph/2 - treeSize; ty += treeSize * 2.5) {
+        c.fillStyle = Math.random() > 0.5 ? '#2a6a25' : '#3a8a35';
+        c.beginPath();
+        c.arc(tx, ty, treeSize, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+
+    // Label
+    if (label && scale > 30) {
+      c.fillStyle = 'rgba(255,255,255,0.6)';
+      c.font = `${Math.max(8, Math.floor(scale / 8))}px Inter, sans-serif`;
+      c.textAlign = 'center';
+      c.fillText(label, px, py + ph/2 + 12);
+    }
+  }
+
+  function drawBuildings(c, w, h, p) {
+    const cx = w / 2, cy = h / 2;
+    const scale = Math.min(w, h) / 24;
+
+    // Manzanas de edificios — grid denso en centro
+    for (let bx = -6; bx <= 6; bx++) {
+      for (let by = -6; by <= 6; by++) {
+        // Saltar si es parque
+        if (bx >= 5 && bx <= 8 && by >= 2 && by <= 4) continue; // Retiro
+        if (bx <= -6 && bx >= -8 && by >= -1 && by <= 2) continue; // Casa de Campo
+        // Saltar si es río
+        const riverY = getRiverY(bx);
+        if (riverY !== null && Math.abs(by - riverY) < 1) continue;
+
+        // Edificio aleatorio
+        const hash = (bx * 7919 + by * 104729) % 100;
+        if (hash > 60) {
+          const dist = Math.sqrt(bx*bx + by*by);
+          const height = Math.max(1, Math.floor((8 - dist * 0.5) * (0.5 + hash / 200)));
+          const bSize = Math.max(p * 2, scale * 0.8);
+          const bHeight = bSize * height * 0.3;
+
+          const px = cx + bx * scale;
+          const py = cy + by * scale;
+
+          // Edificio
+          c.fillStyle = PAL.building;
+          c.fillRect(px - bSize/2, py - bHeight, bSize, bHeight);
+
+          // Techo
+          c.fillStyle = PAL.buildingTop;
+          c.fillRect(px - bSize/2, py - bHeight, bSize, p * 0.5);
+
+          // Lado sombreado
+          c.fillStyle = PAL.buildingSide;
+          c.fillRect(px + bSize/2 - p, py - bHeight, p, bHeight);
+
+          // Ventanas
+          if (bSize > p * 3) {
+            const winSize = p;
+            const winGap = p * 2;
+            for (let wy = py - bHeight + p * 2; wy < py - p; wy += winGap) {
+              for (let wx = px - bSize/2 + p; wx < px + bSize/2 - p; wx += winGap) {
+                if (Math.random() > 0.4) {
+                  c.fillStyle = PAL.window;
+                  c.fillRect(wx, wy, winSize, winSize);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function drawLandmarks(c, w, h, p) {
+    const cx = w / 2, cy = h / 2;
+    const scale = Math.min(w, h) / 24;
+
+    for (const lm of LANDMARKS) {
+      const px = cx + lm.x * scale;
+      const py = cy + lm.y * scale;
+      const lw = lm.w * scale * 0.5;
+      const lh = lm.h * scale * 0.5;
+
+      // Edificio landmark
+      c.fillStyle = lm.type === 'retiro' || lm.type === 'casacampo' ? PAL.park : PAL.building;
+      c.fillRect(px - lw/2, py - lh/2, lw, lh);
+
+      // Borde
+      c.strokeStyle = PAL.buildingSide;
+      c.lineWidth = 1;
+      c.strokeRect(px - lw/2, py - lh/2, lw, lh);
+
+      // Techo especial para algunos
+      if (['sol', 'cibeles', 'atoha'].includes(lm.type)) {
+        c.fillStyle = PAL.roof;
+        c.fillRect(px - lw/2, py - lh/2, lw, p);
+      }
+
+      // Label
+      if (scale > 25) {
+        c.fillStyle = 'rgba(37, 99, 235, 0.7)';
+        c.font = `bold ${Math.max(7, Math.floor(scale / 10))}px Inter, sans-serif`;
+        c.textAlign = 'center';
+        c.fillText(lm.label, px, py + lh/2 + 10);
+      }
+    }
+  }
+
+  function drawMetro(c, w, h, p) {
+    const cx = w / 2, cy = h / 2;
+    const scale = Math.min(w, h) / 24;
+
+    for (const line of METRO) {
+      c.strokeStyle = line.color;
+      c.lineWidth = p * 1.2;
+      c.lineCap = 'round';
+      c.lineJoin = 'round';
+      c.globalAlpha = 0.5;
+      c.beginPath();
+      for (let i = 0; i < line.points.length; i++) {
+        const px = cx + line.points[i][0] * scale;
+        const py = cy + line.points[i][1] * scale;
+        if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+      }
+      c.stroke();
+
+      // Paradas
+      c.fillStyle = 'white';
+      c.globalAlpha = 0.7;
+      for (const pt of line.points) {
+        const px = cx + pt[0] * scale;
+        const py = cy + pt[1] * scale;
+        c.beginPath();
+        c.arc(px, py, p * 0.8, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.globalAlpha = 1;
+    }
+  }
+
+  function getRiverY(col) {
+    for (const pt of MANZANARES) {
+      if (Math.abs(pt.x - col) < 0.5) return pt.y;
+    }
+    return null;
+  }
+
+  function draw() {
+    if (!canvas || bgDirty) {
+      generateBackground();
+    }
+    if (bgCanvas) {
+      ctx.drawImage(bgCanvas, 0, 0);
+    }
+  }
+
+  return { init, resize, draw };
+})();
+
+/* ===========================================================
    RENDER
    =========================================================== */
 function render() {
@@ -3308,11 +3711,20 @@ function init() {
   syncRelationsCache();
   render();
   initDebugPanel();
+  // Madrid background
+  if (typeof MADRID_BG !== 'undefined') {
+    MADRID_BG.init();
+  }
   setTimeout(() => showWelcomeModal(), 120);
 }
 
 window.addEventListener('load', init);
-window.addEventListener('resize', () => applyTransform());
+window.addEventListener('resize', () => {
+  applyTransform();
+  if (typeof MADRID_BG !== 'undefined') {
+    MADRID_BG.resize();
+  }
+});
 
 // Keyboard: Escape closes panel/modal
 document.addEventListener('keydown', e => {
