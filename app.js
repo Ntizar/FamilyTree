@@ -1074,12 +1074,6 @@ function computeGeneration(ids) {
   return generation;
 }
 
-function getParentAnchor(id, positions) {
-  const p = positions[id];
-  if (!p) return null;
-  return { x: p.x + CARD_WIDTH / 2, y: p.y + CARD_HEIGHT / 2 };
-}
-
 function buildFamilyUnits(ids, generation) {
   const unitsByKey = {};
   for (const id of ids) {
@@ -1131,124 +1125,154 @@ function resolveRowCollisions(rowIds, positions) {
   }
 }
 
-function reorderByBarycenter(rowIds, barycenterMap) {
-  return [...rowIds].sort((a, b) => {
-    const ba = barycenterMap[a] ?? Number.MAX_SAFE_INTEGER;
-    const bb = barycenterMap[b] ?? Number.MAX_SAFE_INTEGER;
-    if (ba !== bb) return ba - bb;
-    const sa = state.people[a];
-    const sb = state.people[b];
-    const skA = `${sa?.father || ''}|${sa?.mother || ''}`;
-    const skB = `${sb?.father || ''}|${sb?.mother || ''}`;
-    if (skA !== skB) return skA.localeCompare(skB);
-    const birthDiff = parseBirthYear(sa?.birthDate) - parseBirthYear(sb?.birthDate);
-    if (birthDiff !== 0) return birthDiff;
-    return personOrderIndex(a) - personOrderIndex(b);
-  });
-}
-
 function computeLayout() {
   const ids = [...visibleIds()];
-  if (!ids.length) {
-    state.layoutDirty = false;
-    return;
-  }
+  if (!ids.length) { state.layoutDirty = false; return; }
   syncRelationsCache();
   const generation = computeGeneration(ids);
-  const byGen = mapByGeneration(ids, generation);
+  const byGen = {};
+  for (const id of ids) {
+    const g = generation[id] ?? 0;
+    if (!byGen[g]) byGen[g] = [];
+    byGen[g].push(id);
+  }
   const gens = Object.keys(byGen).map(Number).sort((a, b) => a - b);
   const maxGen = gens.length ? Math.max(...gens) : 0;
-  const orderByGen = {};
 
+  // Initial order by insertion
+  const orderByGen = {};
   for (const g of gens) {
     orderByGen[g] = [...byGen[g]].sort((a, b) => personOrderIndex(a) - personOrderIndex(b));
   }
 
-  for (let pass = 0; pass < 4; pass++) {
-    for (let g = maxGen; g >= 0; g--) {
-      const row = orderByGen[g] || [];
-      const lower = orderByGen[g + 1] || [];
-      const lowerIndex = new Map(lower.map((id, idx) => [id, idx]));
-      const bary = {};
-      for (const id of row) {
-        const children = getChildren(id).map(p => p.id).filter(cid => generation[cid] === g + 1);
-        if (!children.length) continue;
-        bary[id] = children.reduce((sum, cid) => sum + (lowerIndex.get(cid) ?? 0), 0) / children.length;
-      }
-      orderByGen[g] = reorderByBarycenter(row, bary);
-      enforceCoupleAdjacency(orderByGen[g], generation);
-    }
-    for (let g = 1; g <= maxGen; g++) {
-      const row = orderByGen[g] || [];
-      const upper = orderByGen[g - 1] || [];
-      const upperIndex = new Map(upper.map((id, idx) => [id, idx]));
-      const bary = {};
-      for (const id of row) {
-        const parents = parentIds(id).filter(pid => generation[pid] === g - 1);
-        if (!parents.length) continue;
-        bary[id] = parents.reduce((sum, pid) => sum + (upperIndex.get(pid) ?? 0), 0) / parents.length;
-      }
-      orderByGen[g] = reorderByBarycenter(row, bary);
-      enforceCoupleAdjacency(orderByGen[g], generation);
-    }
-  }
-
+  // Initial X positions
   const positions = {};
   for (const g of gens) {
-    const row = orderByGen[g];
     let cursorX = 0;
-    let previousFamilyKey = '';
+    const row = orderByGen[g];
     for (const id of row) {
-      const person = state.people[id];
-      const familyKey = `${person.father || ''}|${person.mother || ''}|${person.untypedParents.join(',')}`;
-      if (previousFamilyKey && familyKey !== previousFamilyKey) cursorX += LAYOUT.UNIT_GAP;
-      const manual = person.manualPosition;
+      const p = state.people[id];
+      const manual = p?.manualPosition;
       if (manual) {
-        positions[id] = { x: manual.x, y: manual.y };
+        positions[id] = { x: manual.x, y: LAYOUT.Y_BASE + g * LAYOUT.ROW_HEIGHT };
+        cursorX = Math.max(cursorX, manual.x + CARD_WIDTH + LAYOUT.MIN_GAP);
       } else {
         positions[id] = { x: cursorX, y: LAYOUT.Y_BASE + g * LAYOUT.ROW_HEIGHT };
+        cursorX += CARD_WIDTH + LAYOUT.MIN_GAP;
       }
-      cursorX = Math.max(cursorX + CARD_WIDTH + LAYOUT.MIN_GAP, positions[id].x + CARD_WIDTH + LAYOUT.MIN_GAP);
-      previousFamilyKey = familyKey;
     }
-    resolveRowCollisions(row, positions);
   }
 
-  const units = buildFamilyUnits(ids, generation);
-  for (let iter = 0; iter < 5; iter++) {
+  // Iterative refinement: barycenter por posición real + centering de hijos
+  for (let pass = 0; pass < 12; pass++) {
     let maxDelta = 0;
+
+    // Bottom-up: reordenar padres por centro de hijos
+    for (let g = maxGen; g >= 0; g--) {
+      const row = orderByGen[g];
+      const lower = orderByGen[g + 1] || [];
+      const baryX = {};
+      for (const id of row) {
+        const children = getChildren(id).map(p => p.id).filter(cid => positions[cid]);
+        if (!children.length) continue;
+        const cx = children.reduce((s, cid) => s + positions[cid].x + CARD_WIDTH / 2, 0) / children.length;
+        baryX[id] = cx;
+      }
+      if (Object.keys(baryX).length > 0) {
+        orderByGen[g] = [...row].sort((a, b) => {
+          const ba = baryX[a], bb = baryX[b];
+          if (ba !== undefined && bb !== undefined) return ba - bb;
+          if (ba !== undefined) return -1;
+          if (bb !== undefined) return 1;
+          return personOrderIndex(a) - personOrderIndex(b);
+        });
+      }
+    }
+
+    // Top-down: reordenar hijos por centro de padres
+    for (let g = 1; g <= maxGen; g++) {
+      const row = orderByGen[g];
+      const upper = orderByGen[g - 1] || [];
+      const baryX = {};
+      for (const id of row) {
+        const parents = parentIds(id).filter(pid => positions[pid]);
+        if (!parents.length) continue;
+        const cx = parents.reduce((s, pid) => s + positions[pid].x + CARD_WIDTH / 2, 0) / parents.length;
+        baryX[id] = cx;
+      }
+      if (Object.keys(baryX).length > 0) {
+        orderByGen[g] = [...row].sort((a, b) => {
+          const ba = baryX[a], bb = baryX[b];
+          if (ba !== undefined && bb !== undefined) return ba - bb;
+          if (ba !== undefined) return -1;
+          if (bb !== undefined) return 1;
+          return personOrderIndex(a) - personOrderIndex(b);
+        });
+      }
+    }
+
+    // Forzar adyacencia de parejas
+    for (const g of gens) {
+      enforceCoupleAdjacency(orderByGen[g], generation);
+    }
+
+    // Asignar X basado en nuevo orden + familia
+    for (const g of gens) {
+      let cursorX = 0;
+      const row = orderByGen[g];
+      let prevFamilyKey = '';
+      for (const id of row) {
+        const p = state.people[id];
+        if (p?.manualPosition) continue;
+        const person = state.people[id];
+        // Family key con fallback único por persona para evitar aglomeración de huérfanos
+        const fk = (person.father || person.mother || (person.untypedParents || []).length)
+          ? `${person.father || ''}|${person.mother || ''}|${(person.untypedParents || []).join(',')}`
+          : `orphan_${id}`;
+        if (prevFamilyKey && fk !== prevFamilyKey) cursorX += LAYOUT.UNIT_GAP;
+        const dx = cursorX - positions[id].x;
+        if (Math.abs(dx) > 0.5 && !state.people[id]?.manualPosition) positions[id].x = cursorX;
+        cursorX += CARD_WIDTH + LAYOUT.MIN_GAP;
+        prevFamilyKey = fk;
+      }
+    }
+
+    // Centrar parejas sobre hijos
+    const units = buildFamilyUnits(ids, generation);
     for (const unit of units) {
       const children = unit.children.filter(cid => positions[cid]);
       const parents = unit.parents.filter(pid => positions[pid]);
       if (!children.length || !parents.length) continue;
-      const cxChildren = children.reduce((sum, cid) => sum + positions[cid].x + CARD_WIDTH / 2, 0) / children.length;
+      const cx = children.reduce((s, cid) => s + positions[cid].x + CARD_WIDTH / 2, 0) / children.length;
       if (parents.length >= 2) {
-        const sortedParents = [...parents].sort((a, b) => positions[a].x - positions[b].x);
-        const leftId = sortedParents[0];
-        const rightId = sortedParents[1];
-        if (!state.people[leftId].manualPosition) {
-          const targetLeft = cxChildren - CARD_WIDTH - (LAYOUT.COUPLE_GAP / 2);
-          maxDelta = Math.max(maxDelta, Math.abs(targetLeft - positions[leftId].x));
-          positions[leftId].x = targetLeft;
+        const sorted = [...parents].sort((a, b) => positions[a].x - positions[b].x);
+        if (!state.people[sorted[0]]?.manualPosition) {
+          const t = cx - CARD_WIDTH - LAYOUT.COUPLE_GAP / 2;
+          maxDelta = Math.max(maxDelta, Math.abs(t - positions[sorted[0]].x));
+          positions[sorted[0]].x = t;
         }
-        if (!state.people[rightId].manualPosition) {
-          const targetRight = cxChildren + (LAYOUT.COUPLE_GAP / 2);
-          maxDelta = Math.max(maxDelta, Math.abs(targetRight - positions[rightId].x));
-          positions[rightId].x = targetRight;
+        if (!state.people[sorted[1]]?.manualPosition) {
+          const t = cx + LAYOUT.COUPLE_GAP / 2;
+          maxDelta = Math.max(maxDelta, Math.abs(t - positions[sorted[1]].x));
+          positions[sorted[1]].x = t;
         }
       } else {
         const only = parents[0];
-        if (!state.people[only].manualPosition) {
-          const target = cxChildren - CARD_WIDTH / 2;
-          maxDelta = Math.max(maxDelta, Math.abs(target - positions[only].x));
-          positions[only].x = target;
+        if (!state.people[only]?.manualPosition) {
+          const t = cx - CARD_WIDTH / 2;
+          maxDelta = Math.max(maxDelta, Math.abs(t - positions[only].x));
+          positions[only].x = t;
         }
       }
     }
+
+    // Resolver colisiones
     for (const g of gens) resolveRowCollisions(orderByGen[g], positions);
+
     if (maxDelta < 1) break;
   }
 
+  // Volcar posiciones finales
   for (const id of ids) {
     const p = state.people[id];
     if (!p || !positions[id]) continue;
@@ -1336,78 +1360,144 @@ function renderConnections() {
   syncRelationsCache();
   const svg = $('connections');
   svg.innerHTML = '';
-  const visible = visibleIds();
-  const offsetX = 10000;
-  const offsetY = 10000;
-  const visibleIdsList = [...visible];
-  const generation = computeGeneration(visibleIdsList);
+  const ids = [...visibleIds()];
+  if (!ids.length) { svg.style.display = 'none'; return; }
+  svg.style.display = 'block';
 
+  // Calcular bounding box de todas las personas visibles
+  const pad = 60;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const id of ids) {
+    const p = state.people[id];
+    if (!p) continue;
+    if (p.x < minX) minX = p.x;
+    if (p.x + CARD_WIDTH > maxX) maxX = p.x + CARD_WIDTH;
+    if (p.y < minY) minY = p.y;
+    if (p.y + CARD_HEIGHT > maxY) maxY = p.y + CARD_HEIGHT;
+  }
+  if (minX === Infinity) { svg.style.display = 'none'; return; }
+
+  // Posicionar SVG dinámicamente — SIN offset hack
+  const svgL = minX - pad, svgT = minY - pad;
+  const svgW = maxX - minX + pad * 2, svgH = maxY - minY + pad * 2;
+  svg.style.left = svgL + 'px';
+  svg.style.top = svgT + 'px';
+  svg.style.width = svgW + 'px';
+  svg.style.height = svgH + 'px';
+  svg.setAttribute('width', svgW);
+  svg.setAttribute('height', svgH);
+
+  // Offset local: coordenadas canvas → SVG
+  const ox = -svgL, oy = -svgT;
+
+  // Defs: gradientes Aurora
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  defs.innerHTML = `
+    <linearGradient id="gradParent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2563eb" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="gradPartner" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2563eb" stop-opacity="0.35"/>
+      <stop offset="50%" stop-color="#8b5cf6" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#db2777" stop-opacity="0.35"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>`;
+  svg.appendChild(defs);
+
+  // 1. Líneas de pareja
   const drawnPartners = new Set();
   for (const [aId, bId] of Tree.getCouples()) {
-    if (!visible.has(aId) || !visible.has(bId)) continue;
-    const a = state.people[aId];
-    const b = state.people[bId];
+    if (!ids.includes(aId) || !ids.includes(bId)) continue;
+    const a = state.people[aId], b = state.people[bId];
     if (!a || !b) continue;
     const key = [aId, bId].sort().join('|');
     if (drawnPartners.has(key)) continue;
     drawnPartners.add(key);
-    const aCenter = a.x + CARD_WIDTH / 2;
-    const bCenter = b.x + CARD_WIDTH / 2;
-    const y = offsetY + ((a.y + b.y) / 2) + CARD_HEIGHT / 2;
-    svg.appendChild(createConnectionPath([
-      [offsetX + Math.min(aCenter, bCenter), y],
-      [offsetX + Math.max(aCenter, bCenter), y],
-    ], 'partner'));
+
+    const x1 = ox + a.x + CARD_WIDTH;
+    const x2 = ox + b.x;
+    const y = oy + a.y + CARD_HEIGHT + 4;
+
+    // Línea horizontal entre parejas
+    appendPath(svg, `M ${x1} ${y} L ${x2} ${y}`, {
+      stroke: 'url(#gradPartner)', 'stroke-width': 2.5,
+      'stroke-linecap': 'round',
+    });
+
+    // Punto decorativo en el centro
+    const mx = (x1 + x2) / 2;
+    appendCircle(svg, mx, y, 3, { fill: '#8b5cf6', opacity: 0.5 });
   }
 
-  const units = buildFamilyUnits(visibleIdsList, generation);
+  // 2. Conexiones padre-hijo
+  const gen = computeGeneration(ids);
+  const units = buildFamilyUnits(ids, gen);
   for (const unit of units) {
-    const children = unit.children.filter(cid => visible.has(cid) && !!state.people[cid]);
-    if (!children.length) continue;
-    const parents = unit.parents.filter(pid => visible.has(pid) && !!state.people[pid]);
-    if (!parents.length) continue;
+    const children = unit.children.filter(cid => ids.includes(cid) && state.people[cid]);
+    const parents = unit.parents.filter(pid => ids.includes(pid) && state.people[pid]);
+    if (!children.length || !parents.length) continue;
 
-    const parentAnchors = parents
-      .map(pid => getParentAnchor(pid, state.people))
-      .filter(Boolean)
-      .sort((a, b) => a.x - b.x);
-    if (!parentAnchors.length) continue;
+    // Puntos de anclaje: borde inferior de padres, superior de hijos
+    const pAnchors = parents.map(pid => ({
+      x: state.people[pid].x + CARD_WIDTH / 2,
+      y: state.people[pid].y + CARD_HEIGHT,
+    })).sort((a, b) => a.x - b.x);
 
-    const anchorX = parentAnchors.length === 1
-      ? parentAnchors[0].x
-      : (parentAnchors[0].x + parentAnchors[parentAnchors.length - 1].x) / 2;
-    const anchorY = parentAnchors.reduce((sum, anchor) => sum + anchor.y, 0) / parentAnchors.length;
+    const cAnchors = children.map(cid => ({
+      x: state.people[cid].x + CARD_WIDTH / 2,
+      y: state.people[cid].y,
+    })).sort((a, b) => a.x - b.x);
 
-    const parentGen = Math.max(...parents.map(pid => generation[pid] ?? 0));
-    const childCenters = children.map(cid => state.people[cid].x + CARD_WIDTH / 2).sort((a, b) => a - b);
-    const childTopYs = children.map(cid => state.people[cid].y);
-    const defaultRailY = offsetY + LAYOUT.Y_BASE + ((parentGen + 0.5) * LAYOUT.ROW_HEIGHT);
-    const avgChildY = offsetY + (childTopYs.reduce((sum, y) => sum + y, 0) / childTopYs.length);
-    const railY = Math.round((defaultRailY + avgChildY) / 2);
+    // Rail Y: 35% entre fondo de padres y techo de hijos
+    const pBottom = pAnchors.reduce((s, a) => Math.max(s, a.y), 0);
+    const cTop = cAnchors.reduce((s, a) => Math.min(s, a.y), Infinity);
+    const railY = pBottom + (cTop - pBottom) * 0.35;
 
-    const sx = offsetX + anchorX;
-    const sy = offsetY + anchorY;
-    svg.appendChild(createConnectionPath([[sx, sy], [sx, railY]]));
+    // Extensión horizontal: de padres a hijos
+    const pMin = pAnchors[0].x, pMax = pAnchors[pAnchors.length - 1].x;
+    const cMin = cAnchors[0].x, cMax = cAnchors[cAnchors.length - 1].x;
+    const rMin = Math.min(pMin, cMin);
+    const rMax = Math.max(pMax, cMax);
 
-    const minChildX = offsetX + childCenters[0];
-    const maxChildX = offsetX + childCenters[childCenters.length - 1];
-    svg.appendChild(createConnectionPath([[minChildX, railY], [maxChildX, railY]]));
+    // Bajada vertical desde cada padre hasta el rail
+    for (const pa of pAnchors) {
+      appendPath(svg, `M ${ox+pa.x} ${oy+pa.y} L ${ox+pa.x} ${oy+railY}`, {
+        stroke: 'url(#gradParent)', 'stroke-width': 2, 'stroke-linecap': 'round',
+      });
+    }
 
-    for (const childId of children) {
-      const child = state.people[childId];
-      if (!child) continue;
-      const childX = offsetX + child.x + CARD_WIDTH / 2;
-      const childY = offsetY + child.y;
-      svg.appendChild(createConnectionPath([[childX, railY], [childX, childY]]));
+    // Rail horizontal
+    appendPath(svg, `M ${ox+rMin} ${oy+railY} L ${ox+rMax} ${oy+railY}`, {
+      stroke: 'url(#gradParent)', 'stroke-width': 1.5, 'stroke-linecap': 'round',
+    });
+
+    // Bajada desde rail hasta cada hijo
+    for (const ca of cAnchors) {
+      appendPath(svg, `M ${ox+ca.x} ${oy+railY} L ${ox+ca.x} ${oy+ca.y}`, {
+        stroke: 'url(#gradParent)', 'stroke-width': 2, 'stroke-linecap': 'round',
+      });
     }
   }
 }
 
-function createConnectionPath(points, className = '') {
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', points.map((point, index) => `${index ? 'L' : 'M'} ${point[0]} ${point[1]}`).join(' '));
-  if (className) path.setAttribute('class', className);
-  return path;
+function appendPath(svg, d, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  el.setAttribute('d', d);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  svg.appendChild(el);
+}
+
+function appendCircle(svg, cx, cy, r, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  el.setAttribute('cx', cx);
+  el.setAttribute('cy', cy);
+  el.setAttribute('r', r);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  svg.appendChild(el);
 }
 
 function applyTransform() {

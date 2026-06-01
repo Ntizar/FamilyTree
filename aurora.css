@@ -35,41 +35,26 @@
   background: #edf4ff;
 }
 
-.family-tree-skin .canvas-wrap {
-  background:
-    radial-gradient(circle at 1px 1px, rgba(53, 106, 216, 0.14) 1px, transparent 0),
-    radial-gradient(circle at 20% 0%, rgba(53, 106, 216, 0.05), transparent 24%),
-    radial-gradient(circle at 85% 10%, rgba(241, 168, 75, 0.06), transparent 22%);
-  background-size: 24px 24px, auto, auto;
-  background-color: #f6f9ff;
+/* Aurora photo glow */
+.family-tree-skin .person-photo {
+  box-shadow: 0 0 0 2px rgba(53, 106, 216, 0.08);
 }
 
-.family-tree-skin .person {
-  border-color: #dbe4f0;
-  background: rgba(255, 255, 255, 0.96);
+.family-tree-skin .person:hover .person-photo {
+  box-shadow: 0 0 0 3px rgba(53, 106, 216, 0.15), 0 4px 16px rgba(37, 99, 235, 0.08);
 }
 
-.family-tree-skin .person:hover {
-  border-color: #bfd0ea;
+body.dark-mode .family-tree-skin .person-photo {
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.1);
 }
 
-.family-tree-skin .person.selected {
-  border-color: #356ad8;
-  box-shadow: 0 0 0 3px #e7efff, 0 6px 20px rgba(22, 32, 51, 0.08);
+body.dark-mode .family-tree-skin .person:hover .person-photo {
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2), 0 4px 16px rgba(96, 165, 250, 0.08);
 }
 
-.family-tree-skin .person-photo,
-.family-tree-skin .relation-chip-photo,
-.family-tree-skin .search-result-photo {
-  background: #edf4ff;
-}
-
-.family-tree-skin .connections path {
-  stroke: #bccbdd;
-}
-
-.family-tree-skin .connections path.partner {
-  stroke: #f1a84b;
+body.dark-mode .family-tree-skin .connection-pulse {
+  fill: #60a5fa;
+  opacity: 0.3;
 }
 
 .family-tree-skin .panel,

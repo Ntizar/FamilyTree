@@ -54,35 +54,9 @@ body.dark-mode .family-tree-skin .topbar {
   border-bottom-color: rgba(51, 65, 85, 0.5);
 }
 
-body.dark-mode .family-tree-skin .canvas-wrap {
-  background:
-    radial-gradient(circle at 1px 1px, rgba(96, 165, 250, 0.15) 1px, transparent 0),
-    radial-gradient(circle at 20% 0%, rgba(96, 165, 250, 0.04), transparent 24%),
-    radial-gradient(circle at 85% 10%, rgba(251, 191, 36, 0.05), transparent 22%);
-  background-size: 24px 24px, auto, auto;
-  background-color: #0f172a;
-}
-
-body.dark-mode .family-tree-skin .person {
-  background: rgba(30, 41, 59, 0.96);
+body.dark-mode .family-tree-skin .relation-chip {
+  background: #0f172a;
   border-color: #334155;
-}
-
-body.dark-mode .family-tree-skin .person:hover {
-  border-color: #475569;
-}
-
-body.dark-mode .family-tree-skin .person.selected {
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15), 0 6px 20px rgba(0, 0, 0, 0.3);
-}
-
-body.dark-mode .family-tree-skin .panel,
-body.dark-mode .family-tree-skin .modal,
-body.dark-mode .family-tree-skin .menu,
-body.dark-mode .family-tree-skin .search-results,
-body.dark-mode .family-tree-skin .zoom-controls {
-  background: rgba(30, 41, 59, 0.96);
 }
 
 body.dark-mode .family-tree-skin .field input,
@@ -116,12 +90,14 @@ body.dark-mode .family-tree-skin .empty-state {
   border-color: #334155;
 }
 
-body.dark-mode .family-tree-skin .connections path {
-  stroke: #475569;
+.connections path {
+  fill: none;
+  pointer-events: none;
+  transition: opacity var(--transition-default);
 }
 
-body.dark-mode .family-tree-skin .connections path.partner {
-  stroke: #fbbf24;
+body.dark-mode .family-tree-skin .connections path {
+  opacity: 0.8;
 }
 
 body.dark-mode .family-tree-skin .relation-chip {
@@ -240,8 +216,10 @@ body { display: flex; flex-direction: column; }
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 1px 1px, #d8d6cf 1px, transparent 0);
-  background-size: 24px 24px;
+    radial-gradient(circle at 1px 1px, rgba(53, 106, 216, 0.08) 1px, transparent 0),
+    radial-gradient(circle at 15% 5%, rgba(37, 99, 235, 0.03), transparent 24%),
+    radial-gradient(circle at 85% 8%, rgba(241, 168, 75, 0.03), transparent 20%);
+  background-size: 24px 24px, auto, auto;
   background-color: var(--bg);
   transition: background-color var(--transition-slow);
 }
@@ -401,21 +379,63 @@ body { display: flex; flex-direction: column; }
 /* ========== SVG CONNECTIONS ========== */
 .connections {
   position: absolute;
-  top: 0; left: 0;
   pointer-events: none;
   overflow: visible;
 }
-.connections path {
-  stroke: #b8b6af;
-  stroke-width: 1.5;
-  fill: none;
-}
-.connections path.partner {
-  stroke: var(--warm);
-  stroke-width: 2;
+
+/* Aurora card styles — glassmorphism */
+.person {
+  position: absolute;
+  width: 200px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(219, 226, 239, 0.6);
+  border-radius: var(--radius);
+  padding: 16px 14px 14px;
+  box-shadow: 0 2px 12px rgba(22, 32, 51, 0.06), 0 1px 3px rgba(22, 32, 51, 0.04);
+  cursor: pointer;
+  transition: box-shadow var(--transition-default), border-color var(--transition-default), transform var(--transition-default), background var(--transition-slow);
+  user-select: none;
+  animation: card-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-/* ========== EMPTY STATE ========== */
+.person:hover {
+  box-shadow: 0 4px 24px rgba(37, 99, 235, 0.1), 0 2px 8px rgba(22, 32, 51, 0.06);
+  border-color: rgba(37, 99, 235, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateY(-1px);
+  z-index: 10;
+}
+.person.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(53, 106, 216, 0.12), 0 6px 24px rgba(37, 99, 235, 0.12);
+  background: rgba(255, 255, 255, 0.98);
+  z-index: 20;
+}
+body.dark-mode .family-tree-skin .person {
+  background: rgba(30, 41, 59, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(51, 65, 85, 0.4);
+}
+body.dark-mode .family-tree-skin .person:hover {
+  background: rgba(30, 41, 59, 0.96);
+  border-color: rgba(96, 165, 250, 0.25);
+  box-shadow: 0 4px 24px rgba(96, 165, 250, 0.08);
+}
+body.dark-mode .family-tree-skin .person.selected {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.12), 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+body.dark-mode .canvas-wrap {
+  background:
+    radial-gradient(circle at 1px 1px, rgba(96, 165, 250, 0.15) 1px, transparent 0),
+    radial-gradient(circle at 20% 0%, rgba(96, 165, 250, 0.04), transparent 24%),
+    radial-gradient(circle at 85% 10%, rgba(251, 191, 36, 0.05), transparent 22%);
+  background-size: 24px 24px, auto, auto;
+  background-color: #0f172a;
+}
 .empty-state {
   position: absolute;
   top: 50%; left: 50%;
