@@ -1,0 +1,30 @@
+{
+  "name": "familytree-raices",
+  "version": "2.0.0",
+  "description": "Editor visual de árboles genealógicos — Donde los abuelos florecen y el JSON sale con uniforme militar de fecha y hora.",
+  "homepage": "https://ntizar.github.io/FamilyTree/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ntizar/FamilyTree.git"
+  },
+  "author": "David Antizar",
+  "license": "MIT",
+  "keywords": [
+    "family-tree",
+    "genealogy",
+    "tree",
+    "family",
+    "genealogia",
+    "arbol-genealogico"
+  ],
+  "scripts": {
+    "serve": "npx serve .",
+    "build": "echo 'No build step required — static HTML'",
+    "lint": "echo 'No linter configured yet'"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "Ra\u00edces \u00b7 \u00c1rbol Geneal\u00f3gico",
+  "short_name": "Ra\u00edces",
+  "description": "Editor visual de \u00e1rboles geneal\u00f3gicos con fotos, exportaci\u00f3n JSON y Excel",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f6f9ff",
+  "theme_color": "#356ad8",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
