@@ -12,6 +12,6 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Copy all static files
 COPY . /usr/share/nginx/html
 
-EXPOSE 8080
+EXPOSE 6500
 
 CMD ["nginx", "-g", "daemon off;"]
